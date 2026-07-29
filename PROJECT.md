@@ -31,11 +31,24 @@
 
 ```
 image-screener/
-  app.py              # Main Flask application (routes + logic)
+  app.py              # Flask routing ONLY — no business logic
   run.py              # Production startup (Waitress on :5051)
-  image_repair_v2.py  # V2 repair engine (OpenCV + rembg) — WORK IN PROGRESS
   PROJECT.md          # This file — AI collaboration guide
   requirements.txt    # Python dependencies
+  server-deploy.sh    # Server-side one-click deploy script
+
+  modules/            # All business logic organized by domain
+    auth/
+      __init__.py     # login_required decorator
+    quality/
+      __init__.py     # analyze_image(), check_edge_quality(), check_color_uniformity()
+    repair/
+      __init__.py     # V1 repair (PIL-based): repair_image(), repair_upscale(), etc.
+      engine_v2.py    # V2 repair (OpenCV + rembg) — WORK IN PROGRESS
+    orders/
+      __init__.py     # process_order_zip(), ZIP extraction, JSON parsing
+      exporter.py     # Excel export (openpyxl)
+
   templates/
     login.html        # Login page (password-based)
     index.html        # Main UI (2 tabs: Image QC + Order Batch)
@@ -85,7 +98,21 @@ The repair functions in `app.py` use only Pillow filters:
 | `repair_edge_smooth` | Downscale 80% then upscale | DESTRUCTIVE — reduces quality! |
 | `repair_remove_background` | Brightness threshold (>200) | Crude, leaves white edges |
 
-## V2 Repair Engine (image_repair_v2.py — deploying next)
+## Development Workflow
+
+```
+Y同学 (提需求) ──→ GPT (出设计文档/API/架构) ──→ Claw/WorkBuddy (写代码)
+                                                       │
+                                              GPT (Review 代码)
+                                                       │
+                                              Y同学 (部署到腾讯云)
+```
+
+**Code organization rule**: All code MUST go under `modules/<domain>/`. NEVER create flat files like `repair.py`, `upload.py`, `detect.py` in the root.
+
+---
+
+## V2 Repair Engine (modules/repair/engine_v2.py — deploying next)
 
 | Function | Algorithm | Technology |
 |---|---|---|
@@ -111,17 +138,15 @@ Python: system python3
 Packages: flask, waitress, pillow, openpyxl
 ```
 
-### Deployment Command (from local to server)
+### Deployment Command
 
 ```bash
-# Package and upload
-tar czf screener.tar.gz -C /Users/dannychen/WorkBuddy/2026-07-06-10-52-55/image-screener \
-  app.py run.py image_repair_v2.py templates/ requirements.txt
+# Single command from local — packages + uploads + deploys
+bash deploy.sh
 
-# Upload (need SSH access)
+# Or manually:
+tar czf screener.tar.gz app.py run.py modules/ templates/ requirements.txt
 scp screener.tar.gz root@101.33.236.219:/opt/
-
-# On server
 ssh root@101.33.236.219 "
   cd /opt && tar xzf screener.tar.gz -C image-screener/
   pip3 install -r /opt/image-screener/requirements.txt
@@ -159,23 +184,27 @@ The `agent-mail` MCP is connected. It can send/receive emails. Useful for:
 
 ---
 
-## How Another AI Should Work On This
+## How GPT Should Work On This
 
 1. **Read this file first** — it explains everything
 2. **Understand the domain**: Amazon POD, 30x30cm heat transfer, PNG transparent background required
-3. **Critical files to modify**:
-   - `app.py` — routes and V1 repair (being replaced)
-   - `image_repair_v2.py` — the new repair engine (integrate into app.py)
+3. **Code lives in `modules/`** — never add flat files. New feature = new sub-directory under modules/
+4. **`app.py` is routing only** — no business logic goes there
+5. **Critical files to modify**:
+   - `modules/repair/engine_v2.py` — the V2 repair engine
+   - `modules/repair/__init__.py` — V1 repair (being replaced by V2)
+   - `modules/quality/__init__.py` — image analysis and scoring
+   - `modules/orders/__init__.py` — ZIP parsing and order processing
    - `templates/index.html` — frontend UI
-4. **Testing**: Run `python3 app.py` and use the test client
-5. **Deployment**: Package via tar, scp to server, restart systemd
+6. **Testing**: `python3 -c "from app import app; ..."` 
+7. **Deployment**: `bash server-deploy.sh` on the server after scp
 
 ### Priority Tasks
 
-1. **Integrate V2 repair engine into app.py** — replace all Pillow-only repair functions with OpenCV/rembg versions from `image_repair_v2.py`
-2. **Add domain + HTTPS** — set up Nginx reverse proxy with Let's Encrypt
-3. **Performance optimization** — V2 repair is CPU-heavy, consider parallel processing
-4. **Add batch repair to order processing** — currently only screens, doesn't repair in batch mode
+1. **Integrate V2 repair into repair route** — use `modules/repair/engine_v2.py` in `app.py`'s `/api/repair` and `/api/repair-batch`
+2. **Add domain + HTTPS** — Nginx + Let's Encrypt
+3. **Improve V2 engine robustness** — graceful fallback when OpenCV/rembg models fail
+4. **Add progress tracking for batch repair** — WebSocket or polling for long-running repairs
 
 ---
 

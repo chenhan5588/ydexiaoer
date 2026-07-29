@@ -7,32 +7,38 @@ APP_DIR="/opt/image-screener"
 echo "=== PrintAI Studio 部署 ==="
 
 # 1. 备份
-echo "[1/5] 备份旧文件..."
+echo "[1/6] 备份旧文件..."
 cp $APP_DIR/app.py $APP_DIR/app.py.bak 2>/dev/null || true
 
 # 2. 覆盖文件
-echo "[2/5] 更新代码..."
+echo "[2/6] 更新代码..."
 cp app.py $APP_DIR/
 cp run.py $APP_DIR/
-cp image_repair_v2.py $APP_DIR/
 cp requirements.txt $APP_DIR/
+
+# 3. 覆盖 modules/
+echo "[3/6] 更新模块..."
+mkdir -p $APP_DIR/modules/auth $APP_DIR/modules/quality $APP_DIR/modules/repair $APP_DIR/modules/orders
+cp modules/__init__.py $APP_DIR/modules/
+cp modules/auth/__init__.py $APP_DIR/modules/auth/
+cp modules/quality/__init__.py $APP_DIR/modules/quality/
+cp modules/repair/__init__.py $APP_DIR/modules/repair/
+cp modules/repair/engine_v2.py $APP_DIR/modules/repair/
+cp modules/orders/__init__.py $APP_DIR/modules/orders/
+cp modules/orders/exporter.py $APP_DIR/modules/orders/
+
+# 4. 覆盖模板
+echo "[4/6] 更新模板..."
 mkdir -p $APP_DIR/templates
 cp templates/login.html $APP_DIR/templates/
 cp templates/index.html $APP_DIR/templates/
 
-# 3. 安装新依赖（Flask-Login）
-echo "[3/5] 安装 Python 依赖..."
+# 5. 安装依赖
+echo "[5/6] 安装 Python 依赖..."
 pip3 install flask-login 2>&1 | tail -3
 
-# 4. 确保环境变量（默认密码 printai2024）
-echo "[4/5] 配置环境变量..."
-if ! grep -q "APP_PASSWORD" /etc/systemd/system/image-screener.service 2>/dev/null; then
-    sed -i '/\[Service\]/a Environment=APP_PASSWORD=printai2024' /etc/systemd/system/image-screener.service
-    systemctl daemon-reload
-fi
-
-# 5. 重启服务
-echo "[5/5] 重启服务..."
+# 6. 重启服务
+echo "[6/6] 重启服务..."
 systemctl restart image-screener
 
 sleep 2
