@@ -1,9 +1,12 @@
 #!/bin/bash
 # === 服务器端一键部署脚本 ===
 # 在服务器上运行: bash server-deploy.sh
+# 前提: deploy-update.tar.gz 已解压到 /tmp/
 set -e
 
 APP_DIR="/opt/image-screener"
+SRC_DIR="/tmp/backend"  # tarball 解压后 backend/ 在 /tmp/backend/
+
 echo "=== PrintAI Studio 部署 ==="
 
 # 1. 备份
@@ -12,26 +15,26 @@ cp $APP_DIR/app.py $APP_DIR/app.py.bak 2>/dev/null || true
 
 # 2. 覆盖文件
 echo "[2/6] 更新代码..."
-cp app.py $APP_DIR/
-cp run.py $APP_DIR/
-cp requirements.txt $APP_DIR/
+cp $SRC_DIR/app.py $APP_DIR/
+cp $SRC_DIR/run.py $APP_DIR/
+cp $SRC_DIR/requirements.txt $APP_DIR/
 
 # 3. 覆盖 modules/
 echo "[3/6] 更新模块..."
 mkdir -p $APP_DIR/modules/auth $APP_DIR/modules/quality $APP_DIR/modules/repair $APP_DIR/modules/orders
-cp modules/__init__.py $APP_DIR/modules/
-cp modules/auth/__init__.py $APP_DIR/modules/auth/
-cp modules/quality/__init__.py $APP_DIR/modules/quality/
-cp modules/repair/__init__.py $APP_DIR/modules/repair/
-cp modules/repair/engine_v2.py $APP_DIR/modules/repair/
-cp modules/orders/__init__.py $APP_DIR/modules/orders/
-cp modules/orders/exporter.py $APP_DIR/modules/orders/
+cp $SRC_DIR/modules/__init__.py $APP_DIR/modules/ 2>/dev/null || true
+cp $SRC_DIR/modules/auth/__init__.py $APP_DIR/modules/auth/ 2>/dev/null || true
+cp $SRC_DIR/modules/quality/__init__.py $APP_DIR/modules/quality/ 2>/dev/null || true
+cp $SRC_DIR/modules/repair/__init__.py $APP_DIR/modules/repair/ 2>/dev/null || true
+cp $SRC_DIR/modules/repair/engine_v2.py $APP_DIR/modules/repair/ 2>/dev/null || true
+cp $SRC_DIR/modules/orders/__init__.py $APP_DIR/modules/orders/ 2>/dev/null || true
+cp $SRC_DIR/modules/orders/exporter.py $APP_DIR/modules/orders/ 2>/dev/null || true
 
 # 4. 覆盖模板
 echo "[4/6] 更新模板..."
 mkdir -p $APP_DIR/templates
-cp templates/login.html $APP_DIR/templates/
-cp templates/index.html $APP_DIR/templates/
+cp $SRC_DIR/templates/login.html $APP_DIR/templates/
+cp $SRC_DIR/templates/index.html $APP_DIR/templates/
 
 # 5. 安装依赖
 echo "[5/6] 安装 Python 依赖..."

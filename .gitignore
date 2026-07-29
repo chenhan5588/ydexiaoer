@@ -1,8 +1,14 @@
 __pycache__/
 *.pyc
 .DS_Store
-outputs/
-uploads/
 *.bak
 venv/
 .env
+backend/uploads/
+backend/outputs/
+backend/models/
+uploads/
+outputs/
+models/
+github_deploy_key
+github_deploy_key.pub
