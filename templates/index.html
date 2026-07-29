@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片批量筛选 - 烫画来图质检</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f5f0;
+  --surface: #ffffff;
+  --border: #d5d5cc;
+  --text: #2c2c2a;
+  --text-sec: #5f5e5a;
+  --text-hint: #888780;
+  --green: #1d9e75;
+  --green-bg: #e1f5ee;
+  --amber: #ef9f27;
+  --amber-bg: #faeeda;
+  --red: #e24b4a;
+  --red-bg: #fcebeb;
+  --primary: #534ab7;
+  --primary-bg: #eeedfe;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+header h1 { font-size: 18px; font-weight: 500; }
+
+.logout-btn {
+  font-size: 12px;
+  color: var(--text-hint);
+  text-decoration: none;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.logout-btn:hover { color: var(--red); border-color: var(--red); }
+
+.settings-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-sec);
+}
+
+.settings-row input {
+  width: 56px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+  margin-bottom: 20px;
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.drop-zone p { font-size: 14px; color: var(--text-sec); }
+.drop-zone p strong { color: var(--primary); }
+.drop-zone .hint { font-size: 12px; color: var(--text-hint); margin-top: 4px; }
+
+.summary-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-card {
+  flex: 1;
+  min-width: 100px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+
+.summary-card .count { font-size: 28px; font-weight: 500; }
+.summary-card .label { font-size: 12px; color: var(--text-sec); margin-top: 4px; }
+.summary-card.pass .count { color: var(--green); }
+.summary-card.warn .count { color: var(--amber); }
+.summary-card.fail .count { color: var(--red); }
+.summary-card.total .count { color: var(--text); }
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.filter-chip {
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-sec);
+  transition: all 0.15s;
+  background: var(--surface);
+}
+
+.filter-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.filter-chip.pass-chip.active { background: var(--green); border-color: var(--green); }
+.filter-chip.warn-chip.active { background: var(--amber); border-color: var(--amber); }
+.filter-chip.fail-chip.active { background: var(--red); border-color: var(--red); }
+
+.btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-outline { background: var(--surface); color: var(--text-sec); border: 1px solid var(--border); }
+.btn-success { background: var(--green); color: #fff; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.repair-progress {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar-container {
+  flex: 1;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.repair-result-row {
+  background: #f9fdf9 !important;
+  border-left: 3px solid var(--green) !important;
+}
+
+.repair-result-row td {
+  padding: 8px 14px !important;
+}
+
+.score-change {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.score-up { color: var(--green); }
+.score-down { color: var(--red); }
+
+.download-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+.download-link:hover { text-decoration: underline; }
+
+.action-cell {
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+.results-table {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.results-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.results-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-sec);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #fafaf7;
+  border-bottom: 1px solid var(--border);
+}
+
+.results-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f0f0eb;
+  vertical-align: middle;
+}
+
+.results-table tr:last-child td { border-bottom: none; }
+
+.thumb { width: 48px; height: 48px; border-radius: 4px; object-fit: cover; border: 1px solid var(--border); }
+
+.filename-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badge-pass { background: var(--green-bg); color: var(--green); }
+.badge-fix { background: var(--amber-bg); color: var(--amber); }
+.badge-reject { background: var(--red-bg); color: var(--red); }
+.badge-error { background: #f0f0f0; color: var(--text-hint); }
+
+.metric { font-size: 12px; }
+.metric-ok { color: var(--green); }
+.metric-warn { color: var(--amber); }
+.metric-fail { color: var(--red); }
+
+.issues-popup {
+  font-size: 12px;
+  color: var(--text-sec);
+  max-width: 220px;
+}
+
+.issues-popup li { margin: 2px 0; }
+
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 12px;
+  color: var(--text-sec);
+}
+
+.hidden { display: none !important; }
+
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--text); color: #fff;
+  padding: 10px 20px; border-radius: var(--radius-sm);
+  font-size: 13px; z-index: 100;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.export-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.score-bar {
+  width: 60px;
+  height: 4px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ===== Tab System ===== */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+.tab-btn {
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-sec);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--primary); }
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: var(--primary-bg);
+  border-radius: 8px 8px 0 0;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ===== Order Batch Styles ===== */
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0eb;
+}
+.order-card-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+.order-card-meta {
+  font-size: 12px;
+  color: var(--text-sec);
+}
+.order-images {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.order-img-box {
+  text-align: center;
+}
+.order-img-box img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.order-img-box .label {
+  font-size: 11px;
+  color: var(--text-hint);
+  margin-top: 4px;
+}
+.order-repair-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--green-bg);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--green);
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>PrintAI Studio — 来图定制质检中心</h1>
+    <a href="/logout" class="logout-btn" title="退出登录">退出</a>
+    <div class="settings-row">
+      <span>目标印刷尺寸:</span>
+      <input type="number" id="printWidth" value="30" min="1" max="200" step="0.5"> x
+      <input type="number" id="printHeight" value="30" min="1" max="200" step="0.5"> cm
+    </div>
+  </header>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="screen">图片质检</button>
+    <button class="tab-btn" data-tab="orders">订单批量处理</button>
+  </div>
+
+  <!-- ===== Tab 1: Image Screening ===== -->
+  <div class="tab-panel active" id="panel-screen">
+    <div class="drop-zone" id="dropZone">
+      <p>拖拽多张客户图片到此处 或 <strong>点击选择</strong></p>
+      <p class="hint">支持 JPG / PNG / WebP / BMP / TIFF，可一次性选择多张</p>
+      <input type="file" id="fileInput" accept="image/*" multiple class="hidden">
+    </div>
+
+    <div style="display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
+      <div style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;">
+        <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px;">输出标准</div>
+        <div style="font-size:12px;color:var(--text-sec);line-height:1.8;">30cm x 30cm / 300dpi / PNG透明底<br>颜色均匀 / 边缘清晰平滑 / 无坑洼</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;">
+        <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px;">检验维度</div>
+        <div style="font-size:12px;color:var(--text-sec);line-height:1.8;">分辨率 / 清晰度 / 噪点 / 对比度<br>颜色均匀度 / 边缘锯齿 / 格式</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;">
+        <div style="font-size:12px;font-weight:500;color:var(--green);margin-bottom:6px;">美工建议</div>
+        <div style="font-size:12px;color:var(--text-sec);line-height:1.8;">新建30x30cm画布 填充深蓝对比色<br>处理后加描边检查锯齿是否修干净</div>
+      </div>
+    </div>
+
+    <div class="summary-bar hidden" id="summaryBar">
+      <div class="summary-card total"><div class="count" id="statTotal">0</div><div class="label">总计</div></div>
+      <div class="summary-card pass"><div class="count" id="statPass">0</div><div class="label">可直接用</div></div>
+      <div class="summary-card warn"><div class="count" id="statFix">0</div><div class="label">需修改</div></div>
+      <div class="summary-card fail"><div class="count" id="statReject">0</div><div class="label">不可用</div></div>
+      <div class="summary-card" style="min-width:140px;">
+        <div class="count" id="statPrint" style="font-size:14px;color:var(--text-sec);">-</div>
+        <div class="label">目标尺寸</div>
+      </div>
+    </div>
+
+    <div class="filter-row hidden" id="filterRow">
+      <span style="font-size:12px;color:var(--text-sec);margin-right:4px;">筛选:</span>
+      <div class="filter-chip active" data-filter="all">全部</div>
+      <div class="filter-chip pass-chip" data-filter="pass">可直接用</div>
+      <div class="filter-chip warn-chip" data-filter="fix">需修改</div>
+      <div class="filter-chip fail-chip" data-filter="reject">不可用</div>
+      <div style="flex:1;"></div>
+      <button class="btn btn-success btn-sm" id="repairAllBtn" disabled>一键 AI 修复全部</button>
+      <button class="btn btn-primary btn-sm" id="downloadAllBtn" disabled>下载全部修复图</button>
+      <button class="btn btn-outline btn-sm" id="exportCsv">导出 CSV</button>
+    </div>
+
+    <div class="repair-progress hidden" id="repairProgress">
+      <span>AI 修复中...</span>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <span id="progressText" style="font-size:12px;color:var(--text-sec);">0/0</span>
+    </div>
+
+    <div class="hidden" id="loadingArea">
+      <div class="loading">
+        <div class="spinner"></div>
+        <span id="loadingText">正在分析图片...</span>
+      </div>
+    </div>
+
+    <div class="results-table hidden" id="resultsArea">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:48px;">预览</th>
+            <th>文件名</th>
+            <th>尺寸</th>
+            <th>DPI</th>
+            <th>清晰度</th>
+            <th>噪点</th>
+            <th>颜色</th>
+            <th>边缘</th>
+            <th>格式</th>
+            <th style="width:54px;">评分</th>
+            <th>评级</th>
+            <th>问题</th>
+            <th style="width:110px;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== Tab 2: Order Batch Processing ===== -->
+  <div class="tab-panel" id="panel-orders">
+    <div class="drop-zone" id="orderDropZone">
+      <p>拖拽 Amazon 订单 ZIP 文件到此处 或 <strong>点击选择</strong></p>
+      <p class="hint">支持同时上传多个 ZIP，自动解析订单信息、质检来图、AI 修复</p>
+      <input type="file" id="orderFileInput" accept=".zip" multiple class="hidden">
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-sec);cursor:pointer;">
+        <input type="checkbox" id="autoRepair" checked style="cursor:pointer;">
+        自动 AI 修复来图
+      </label>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary btn-sm hidden" id="exportExcelBtn">导出 Excel 表格</button>
+      <button class="btn btn-outline btn-sm hidden" id="clearOrdersBtn">清空</button>
+    </div>
+
+    <div class="hidden" id="orderLoadingArea">
+      <div class="loading">
+        <div class="spinner"></div>
+        <span id="orderLoadingText">正在解析订单...</span>
+      </div>
+    </div>
+
+    <div id="orderResultsArea"></div>
+  </div>
+</div>
+
+<script>
+// Auth wrapper — auto-redirect on 401
+const _origFetch = window.fetch;
+window.fetch = async function(...args) {
+  const res = await _origFetch.apply(this, args);
+  if (res.status === 401) {
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
+  return res;
+};
+
+let allResults = [];
+let currentFilter = 'all';
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+['dragover', 'dragenter'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); }));
+['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); }));
+dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFiles(fileInput.files); });
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  const formData = new FormData();
+  for (const f of files) {
+    if (f.type.startsWith('image/')) formData.append('images', f);
+  }
+
+  if (!formData.getAll('images').length) {
+    showToast('请选择图片文件');
+    return;
+  }
+
+  formData.append('printWidth', document.getElementById('printWidth').value || 30);
+  formData.append('printHeight', document.getElementById('printHeight').value || 40);
+
+  document.getElementById('loadingArea').classList.remove('hidden');
+  document.getElementById('resultsArea').classList.add('hidden');
+  document.getElementById('loadingText').textContent = `正在分析 ${formData.getAll('images').length} 张图片...`;
+
+  try {
+    const res = await fetch('/api/screen', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { showToast(data.error); return; }
+
+    allResults = data.results;
+    updateSummary(data.summary, data.print_size);
+    renderTable();
+    document.getElementById('filterRow').classList.remove('hidden');
+    document.getElementById('resultsArea').classList.remove('hidden');
+    document.getElementById('summaryBar').classList.remove('hidden');
+
+    showToast(`完成! ${data.summary.pass} 张可用, ${data.summary.fix} 张需修, ${data.summary.reject} 张不可用`);
+  } catch (err) {
+    showToast('分析失败: ' + err.message);
+  } finally {
+    document.getElementById('loadingArea').classList.add('hidden');
+  }
+}
+
+function updateSummary(summary, printSize) {
+  document.getElementById('statTotal').textContent = summary.total;
+  document.getElementById('statPass').textContent = summary.pass;
+  document.getElementById('statFix').textContent = summary.fix;
+  document.getElementById('statReject').textContent = summary.reject;
+  document.getElementById('statPrint').textContent = printSize;
+}
+
+function getScoreColor(score) {
+  if (score >= 70) return 'var(--green)';
+  if (score >= 40) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function scoreClass(verdict) {
+  if (verdict === 'pass') return 'metric-ok';
+  if (verdict === 'fix') return 'metric-warn';
+  return 'metric-fail';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('resultsBody');
+  let filtered = currentFilter === 'all' ? allResults : allResults.filter(r => r.verdict === currentFilter);
+  if (currentFilter === 'error') filtered = allResults.filter(r => r.error);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-hint);">无匹配结果</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
+    if (r.error) {
+      return `<tr>
+        <td>-</td>
+        <td class="filename-cell" title="${esc(r.filename)}">${esc(r.filename)}</td>
+        <td colspan="10" style="color:var(--text-hint);">${esc(r.error)}</td>
+        <td><span class="badge badge-error">错误</span></td>
+      </tr>`;
+    }
+
+    const scoreColor = getScoreColor(r.quality_score);
+
+    // DPI display
+    const dpiClass = r.scores.resolution === 'pass' ? 'metric-ok' : r.scores.resolution === 'warn' ? 'metric-warn' : 'metric-fail';
+    const dpiLabel = r.scores.resolution === 'pass' ? '' : r.scores.resolution === 'warn' ? '偏低' : '不足';
+
+    // Sharpness
+    const sharpClass = r.scores.sharpness === 'pass' ? 'metric-ok' : r.scores.sharpness === 'warn' ? 'metric-warn' : 'metric-fail';
+    const sharpLabel = r.scores.sharpness === 'pass' ? '清晰' : r.scores.sharpness === 'warn' ? '一般' : '模糊';
+
+    // Noise
+    const noiseClass = r.scores.noise === 'pass' ? 'metric-ok' : r.scores.noise === 'warn' ? 'metric-warn' : 'metric-fail';
+    const noiseLabel = r.scores.noise === 'pass' ? '干净' : r.scores.noise === 'warn' ? '轻微' : '严重';
+
+    // Color uniformity (NEW)
+    const colorClass = r.scores.color_uniformity === 'pass' ? 'metric-ok' : r.scores.color_uniformity === 'warn' ? 'metric-warn' : 'metric-fail';
+    const colorLabel = r.scores.color_uniformity === 'pass' ? '均匀' : r.scores.color_uniformity === 'warn' ? '轻微色差' : '不均匀';
+
+    // Edge quality (NEW)
+    const edgeClass = r.scores.edge_quality === 'pass' ? 'metric-ok' : r.scores.edge_quality === 'warn' ? 'metric-warn' : 'metric-fail';
+    const edgeLabel = r.scores.edge_quality === 'pass' ? '平滑' : r.scores.edge_quality === 'warn' ? '轻微锯齿' : '锯齿严重';
+
+    // Format check (NEW)
+    const fmtClass = r.scores.format === 'pass' ? 'metric-ok' : r.scores.format === 'warn' ? 'metric-warn' : 'metric-fail';
+    const fmtLabel = r.is_png && r.has_alpha ? 'PNG透明底' : r.is_png ? 'PNG无透明' : '非PNG';
+
+    // Action cell: repair button for fix/reject, download if repaired
+    let actionHtml = '';
+    const repairState = repairStates[r.filename];
+    if (repairState && repairState.status === 'done') {
+      actionHtml = `<div class="action-cell">
+        <a class="download-link" href="${repairState.download_url}" download>下载修复图</a>
+        <span class="score-change score-up">${repairState.original_score}→${repairState.repaired_score}</span>
+      </div>`;
+    } else if (repairState && repairState.status === 'repairing') {
+      actionHtml = `<div class="action-cell"><div class="spinner"></div><span style="font-size:11px;color:var(--text-sec);">修复中...</span></div>`;
+    } else if (r.verdict !== 'pass') {
+      actionHtml = `<div class="action-cell">
+        <button class="btn btn-success btn-sm repair-btn" data-filename="${esc(r.filename)}">AI 修复</button>
+      </div>`;
+    } else {
+      actionHtml = `<span style="font-size:11px;color:var(--green);">无需修复</span>`;
+    }
+
+    return `<tr data-verdict="${r.verdict}" data-filename="${esc(r.filename)}">
+      <td><img class="thumb" src="${r.preview}" alt=""></td>
+      <td class="filename-cell" title="${esc(r.filename)}">${esc(r.filename)}</td>
+      <td class="metric">${r.width} x ${r.height}<br><span style="font-size:10px;color:var(--text-hint);">${r.megapixels}MP</span></td>
+      <td class="metric"><span class="${dpiClass}">${r.eff_dpi} dpi</span>${dpiLabel ? '<br><span style="font-size:10px;color:var(--text-hint);">'+dpiLabel+'</span>' : ''}</td>
+      <td class="metric"><span class="${sharpClass}">${sharpLabel}</span></td>
+      <td class="metric"><span class="${noiseClass}">${noiseLabel}</span></td>
+      <td class="metric"><span class="${colorClass}">${colorLabel}</span></td>
+      <td class="metric"><span class="${edgeClass}">${edgeLabel}</span></td>
+      <td class="metric"><span class="${fmtClass}">${fmtLabel}</span></td>
+      <td>
+        <div class="score-bar"><div class="score-fill" style="width:${r.quality_score}%;background:${scoreColor};"></div></div>
+        <span style="font-size:11px;color:${scoreColor};font-weight:500;">${r.quality_score}</span>
+      </td>
+      <td><span class="badge badge-${r.verdict === 'reject' ? 'reject' : r.verdict === 'fix' ? 'fix' : 'pass'}">${r.verdict_label}</span></td>
+      <td><ul class="issues-popup">${r.issues?.length ? r.issues.map(i => '<li>'+esc(i)+'</li>').join('') : '<li style="color:var(--green);">符合标准</li>'}</ul></td>
+      <td>${actionHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Filters
+document.getElementById('filterRow').addEventListener('click', e => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  currentFilter = chip.dataset.filter;
+  renderTable();
+});
+
+// Export CSV
+document.getElementById('exportCsv').addEventListener('click', () => {
+  if (!allResults.length) return showToast('没有数据可导出');
+
+  let csv = '\uFEFF文件名,宽度,高度,百万像素,有效DPI,清晰度,噪点,对比度,颜色均匀度,边缘质量,格式,评分,评级,问题\n';
+  allResults.forEach(r => {
+    if (r.error) return;
+    const issues = (r.issues || []).join('; ');
+    const fmt = r.is_png && r.has_alpha ? 'PNG透明底' : r.is_png ? 'PNG无透明' : '非PNG';
+    csv += `"${r.filename}",${r.width},${r.height},${r.megapixels},${r.eff_dpi},${r.sharpness},${r.noise_level},${r.contrast},${r.color_uniformity},${r.edge_quality},"${fmt}",${r.quality_score},${r.verdict_label},"${issues}"\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '图片质检报告_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV 已下载');
+});
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ============== AI 修复引擎 ==============
+
+let repairStates = {};       // filename -> { status, download_url, applied_fixes, original_score }
+let storedFiles = null;      // FileList from last upload
+
+function updateRepairButtons() {
+  const fixable = allResults.filter(r => r.verdict !== 'pass' && !r.error);
+  const doneCount = Object.values(repairStates).filter(s => s.status === 'done').length;
+  document.getElementById('repairAllBtn').disabled = fixable.length === 0 || doneCount >= fixable.length;
+  document.getElementById('downloadAllBtn').disabled = doneCount === 0;
+}
+
+// ---- Individual repair (extract from stored files) ----
+document.getElementById('resultsBody').addEventListener('click', async e => {
+  const btn = e.target.closest('.repair-btn');
+  if (!btn) return;
+  
+  const filename = btn.dataset.filename;
+  if (!storedFiles) {
+    showToast('请重新上传图片后再修复');
+    return;
+  }
+
+  // Find the file in stored files
+  let file = null;
+  for (const f of storedFiles) {
+    if (f.name === filename) { file = f; break; }
+  }
+  if (!file) { showToast('未找到原始文件，请重新上传'); return; }
+
+  repairStates[filename] = { status: 'repairing' };
+  renderTable();
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const res = await fetch('/api/repair', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) {
+      repairStates[filename] = { status: 'error', error: data.error };
+    } else {
+      repairStates[filename] = {
+        status: 'done',
+        download_url: data.download_url,
+        applied_fixes: data.applied_fixes,
+        original_score: data.original_score,
+        repaired_score: data.repaired_score,
+      };
+      showToast(`${filename}: ${data.applied_fixes.join('、')} → 评分 ${data.original_score}→${data.repaired_score}`);
+    }
+  } catch (err) {
+    repairStates[filename] = { status: 'error', error: err.message };
+  }
+  renderTable();
+  updateRepairButtons();
+});
+
+// ---- 一键修复全部 ----
+document.getElementById('repairAllBtn').addEventListener('click', async () => {
+  if (!storedFiles) {
+    showToast('请先上传图片再修复');
+    return;
+  }
+
+  const toRepair = [];
+  const formData = new FormData();
+  
+  for (const f of storedFiles) {
+    const result = allResults.find(r => r.filename === f.name);
+    if (result && result.verdict !== 'pass' && !result.error) {
+      formData.append('images', f);
+      toRepair.push(f.name);
+    }
+  }
+
+  if (!toRepair.length) {
+    showToast('没有需要修复的图片');
+    return;
+  }
+
+  // Show progress bar
+  const progressDiv = document.getElementById('repairProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  progressDiv.classList.remove('hidden');
+  progressFill.style.width = '0%';
+  progressText.textContent = `0/${toRepair.length}`;
+
+  toRepair.forEach(name => { repairStates[name] = { status: 'repairing' }; });
+  renderTable();
+
+  try {
+    const res = await fetch('/api/repair-batch', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { showToast(data.error); return; }
+
+    let done = 0;
+    for (const r of data.results) {
+      if (r.error) {
+        repairStates[r.filename] = { status: 'error', error: r.error };
+      } else {
+        repairStates[r.filename] = {
+          status: 'done',
+          download_url: r.download_url,
+          applied_fixes: r.applied_fixes || [],
+          original_score: r.original_score,
+          repaired_score: r.original_score,
+        };
+      }
+      done++;
+      progressFill.style.width = `${(done / toRepair.length) * 100}%`;
+      progressText.textContent = `${done}/${toRepair.length}`;
+    }
+    renderTable();
+    updateRepairButtons();
+    
+    const fixedCount = Object.values(repairStates).filter(s => s.status === 'done').length;
+    showToast(`AI 修复完成! ${fixedCount}/${toRepair.length} 张已处理`);
+  } catch (err) {
+    showToast('修复失败: ' + err.message);
+  } finally {
+    setTimeout(() => progressDiv.classList.add('hidden'), 2500);
+  }
+});
+
+// ---- 下载全部修复图 ----
+document.getElementById('downloadAllBtn').addEventListener('click', () => {
+  const done = Object.entries(repairStates).filter(([_, s]) => s.status === 'done');
+  if (!done.length) return showToast('没有可下载的修复图');
+  
+  done.forEach(([_, s], i) => {
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.href = s.download_url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }, i * 300); // Stagger downloads to avoid browser blocking
+  });
+  showToast(`正在下载 ${done.length} 张修复图...`);
+});
+
+// ---- Hook into file upload to store files ----
+const _origHandleFiles = handleFiles;
+handleFiles = async function(files) {
+  storedFiles = files;
+  repairStates = {};
+  await _origHandleFiles(files);
+  updateRepairButtons();
+};
+
+// ============== Tab Switching ==============
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ============== Order Batch Processing ==============
+let parsedOrders = [];
+
+const orderDropZone = document.getElementById('orderDropZone');
+const orderFileInput = document.getElementById('orderFileInput');
+
+['dragover', 'dragenter'].forEach(e => orderDropZone.addEventListener(e, ev => { ev.preventDefault(); orderDropZone.classList.add('drag-over'); }));
+['dragleave', 'drop'].forEach(e => orderDropZone.addEventListener(e, ev => { ev.preventDefault(); orderDropZone.classList.remove('drag-over'); }));
+orderDropZone.addEventListener('drop', e => handleOrderFiles(e.dataTransfer.files));
+orderDropZone.addEventListener('click', () => orderFileInput.click());
+orderFileInput.addEventListener('change', () => { if (orderFileInput.files.length) handleOrderFiles(orderFileInput.files); });
+
+async function handleOrderFiles(files) {
+  if (!files.length) return;
+
+  const formData = new FormData();
+  let zipCount = 0;
+  for (const f of files) {
+    if (f.name.toLowerCase().endsWith('.zip')) {
+      formData.append('zips', f);
+      zipCount++;
+    }
+  }
+
+  if (!zipCount) {
+    showToast('请选择 ZIP 文件');
+    return;
+  }
+
+  formData.append('repair', document.getElementById('autoRepair').checked ? 'true' : 'false');
+
+  document.getElementById('orderLoadingArea').classList.remove('hidden');
+  document.getElementById('orderResultsArea').innerHTML = '';
+  document.getElementById('orderLoadingText').textContent = `正在解析 ${zipCount} 个订单...`;
+  document.getElementById('exportExcelBtn').classList.add('hidden');
+  document.getElementById('clearOrdersBtn').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/batch-orders', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { showToast(data.error); return; }
+
+    parsedOrders = data.orders || [];
+    renderOrders(parsedOrders, data.errors || []);
+
+    if (parsedOrders.length) {
+      document.getElementById('exportExcelBtn').classList.remove('hidden');
+      document.getElementById('clearOrdersBtn').classList.remove('hidden');
+    }
+
+    const msg = `完成! ${parsedOrders.length} 个订单解析成功`;
+    showToast(data.errors?.length ? `${msg}, ${data.errors.length} 个失败` : msg);
+  } catch (err) {
+    showToast('解析失败: ' + err.message);
+  } finally {
+    document.getElementById('orderLoadingArea').classList.add('hidden');
+  }
+}
+
+function renderOrders(orders, errors) {
+  const container = document.getElementById('orderResultsArea');
+  let html = '';
+
+  if (errors.length) {
+    html += '<div style="margin-bottom:16px;padding:12px 16px;background:var(--red-bg);border-radius:8px;color:var(--red);font-size:12px;">';
+    html += `<strong>${errors.length} 个文件解析失败:</strong><br>`;
+    errors.forEach(e => { html += `• ${esc(e.filename)}: ${esc(e.error)}<br>`; });
+    html += '</div>';
+  }
+
+  if (!orders.length) {
+    html += '<div style="text-align:center;padding:40px;color:var(--text-hint);">没有解析到订单数据</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // Summary
+  const totalImgs = orders.reduce((sum, o) => sum + (o.customer_images?.length || 0), 0);
+  const repairedImgs = orders.reduce((sum, o) => sum + (o.customer_images?.filter(ci => ci.repaired_path).length || 0), 0);
+
+  html += `<div class="summary-bar" style="margin-bottom:16px;">
+    <div class="summary-card total"><div class="count">${orders.length}</div><div class="label">订单数</div></div>
+    <div class="summary-card pass"><div class="count">${totalImgs}</div><div class="label">来图总数</div></div>
+    <div class="summary-card warn"><div class="count">${repairedImgs}</div><div class="label">已修复</div></div>
+  </div>`;
+
+  // Order cards
+  orders.forEach(order => {
+    html += `<div class="order-card">
+      <div class="order-card-header">
+        <div>
+          <div class="order-card-title">马帮: ${esc(order.mabang_order_id)} | Amazon: ${esc(order.order_id)}</div>
+          <div class="order-card-meta">${esc(order.title || '')} | 尺码: ${esc(order.size || '-')} | 数量: ${order.quantity || 1}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-hint);">ASIN: ${esc(order.asin || '-')}</div>
+      </div>`;
+
+    // Snapshots (effect images)
+    if (order.snapshot_paths?.length) {
+      html += '<div style="margin-bottom:12px;"><div style="font-size:11px;color:var(--text-hint);margin-bottom:6px;">产品效果图</div><div class="order-images">';
+      order.snapshot_paths.forEach((snap, i) => {
+        const snapName = snap.split('/').pop();
+        html += `<div class="order-img-box">
+          <img src="/outputs/${esc(snapName)}" alt="效果图" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+          <div style="display:none;width:120px;height:120px;background:#f0f0eb;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-hint);">效果图 ${i+1}</div>
+          <div class="label">${esc(snapName)}</div>
+        </div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Customer images with quality info
+    if (order.customer_images?.length) {
+      html += '<div><div style="font-size:11px;color:var(--text-hint);margin-bottom:6px;">客户来图 (已质检+修复)</div><div class="order-images">';
+      order.customer_images.forEach(ci => {
+        if (ci.error) {
+          html += `<div class="order-img-box">
+            <div style="width:120px;height:120px;background:var(--red-bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--red);padding:8px;text-align:center;">${esc(ci.error)}</div>
+            <div class="label">${esc(ci.filename || ci.buyer_filename || 'unknown')}</div>
+          </div>`;
+        } else {
+          const scoreColor = ci.quality_score >= 70 ? 'var(--green)' : ci.quality_score >= 40 ? 'var(--amber)' : 'var(--red)';
+          const verdictBadge = ci.verdict === 'pass' ? '<span class="badge badge-pass" style="font-size:10px;">可直接用</span>' :
+            ci.verdict === 'fix' ? '<span class="badge badge-fix" style="font-size:10px;">需修改</span>' :
+            '<span class="badge badge-reject" style="font-size:10px;">不可用</span>';
+
+          // Show repaired image if available, else original
+          const imgUrl = ci.repaired_path ? '/outputs/' + esc(ci.repaired_path.split('/').pop()) :
+                         ci.saved_original_path ? '/outputs/' + esc(ci.saved_original_path.split('/').pop()) : '';
+
+          html += `<div class="order-img-box">
+            ${imgUrl ? `<img src="${imgUrl}" alt="来图" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">` :
+            `<div style="width:120px;height:120px;background:#f0f0eb;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-hint);">${esc(ci.filename || '')}</div>`}
+            <div class="label" style="color:${scoreColor};font-weight:500;">评分: ${ci.quality_score} ${verdictBadge}</div>
+            <div class="label">${esc(ci.buyer_filename || ci.filename || '')}</div>
+            <div class="label">${esc(ci.surface || '')}</div>
+          </div>`;
+
+          // Repair info
+          if (ci.applied_fixes?.length) {
+            html += `<div style="flex:1;min-width:200px;">
+              <div class="order-repair-info">
+                <strong>AI 修复:</strong> ${esc(ci.applied_fixes.join('、'))}<br>
+                评分 ${ci.quality_score} → ${ci.repaired_score || ci.quality_score}
+                ${ci.repaired_path ? `<br><a class="download-link" href="/outputs/${esc(ci.repaired_path.split('/').pop())}" download>下载修复图</a>` : ''}
+              </div>
+            </div>`;
+          }
+        }
+      });
+      html += '</div></div>';
+    }
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+// Export Excel
+document.getElementById('exportExcelBtn').addEventListener('click', async () => {
+  if (!parsedOrders.length) return showToast('没有订单可导出');
+
+  try {
+    const res = await fetch('/api/export-excel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: parsedOrders }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.error || '导出失败');
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `订单汇总_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Excel 已下载');
+  } catch (err) {
+    showToast('导出失败: ' + err.message);
+  }
+});
+
+// Clear orders
+document.getElementById('clearOrdersBtn').addEventListener('click', () => {
+  parsedOrders = [];
+  document.getElementById('orderResultsArea').innerHTML = '';
+  document.getElementById('exportExcelBtn').classList.add('hidden');
+  document.getElementById('clearOrdersBtn').classList.add('hidden');
+});
+</script>
+
+</body>
+</html>
