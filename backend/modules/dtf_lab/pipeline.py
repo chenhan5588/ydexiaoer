@@ -10,7 +10,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 TARGET_LONG_EDGE = 5000
 OUTPUT_DPI = 300
@@ -118,7 +118,47 @@ def _deskew_from_logo_panel(rgb: np.ndarray) -> np.ndarray:
     )
 
 
-def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _render_confirmed_small_text(
+    yellow: np.ndarray, panel: np.ndarray, text: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """Replace damaged small yellow subtitle with confirmed, editable text."""
+    ys, xs = np.where(panel)
+    if not len(xs):
+        return yellow, np.zeros_like(yellow)
+    top, bottom = int(ys.min()), int(ys.max())
+    subtitle_zone = yellow & (np.indices(yellow.shape)[0] > top + (bottom - top) * 0.68)
+    points = cv2.findNonZero(subtitle_zone.astype(np.uint8))
+    if points is None:
+        return yellow, np.zeros_like(yellow)
+    x, y, w, h = cv2.boundingRect(points)
+    erase = cv2.dilate(
+        subtitle_zone.astype(np.uint8),
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+    ).astype(bool)
+
+    mask = Image.new("L", (yellow.shape[1], yellow.shape[0]), 0)
+    draw = ImageDraw.Draw(mask)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    font = ImageFont.truetype(font_path, max(8, int(h * 1.05)))
+    widths = [draw.textlength(char, font=font) for char in text]
+    base_width = sum(widths)
+    spacing = max(0.0, (w - base_width) / max(1, len(text) - 1))
+    cursor = x + max(0, (w - (base_width + spacing * (len(text) - 1))) / 2)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    baseline_y = y + (h - (bbox[3] - bbox[1])) / 2 - bbox[1]
+    for char, char_width in zip(text, widths):
+        draw.text((cursor, baseline_y), char, font=font, fill=255)
+        cursor += char_width + spacing
+    rendered = np.asarray(mask) > 0
+    result = yellow.copy()
+    result[erase] = False
+    result |= rendered
+    return result, erase
+
+
+def _recover_flat_document(
+    rgb: np.ndarray, confirmed_small_text: str | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """Recover photographed/scanned flat artwork without inventing text.
 
     Removes only border-connected paper, flattens the largest dark logo panel,
@@ -165,6 +205,12 @@ def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     yellow = panel & (hsv[..., 0] >= 12) & (hsv[..., 0] <= 42) & (hsv[..., 1] > 70)
     white = panel & (gray > 145) & ~yellow
     black = panel & ~yellow & ~white
+    if confirmed_small_text:
+        yellow, erased_text = _render_confirmed_small_text(
+            yellow, panel, confirmed_small_text
+        )
+        black |= erased_text
+        black &= ~yellow
     cleaned[black] = (18, 18, 18)
     cleaned[white] = (250, 250, 250)
     if np.any(yellow):
@@ -344,7 +390,10 @@ def _vector_render_document(
     return _place_document_on_square(artwork, target)
 
 
-def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -> tuple[Image.Image, dict[str, Any]]:
+def run_pipeline(
+    image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE,
+    confirmed_small_text: str | None = None,
+) -> tuple[Image.Image, dict[str, Any]]:
     """Return a transparent, colour-preserving PNG candidate and honest report."""
     original = image.convert("RGBA")
     rgba = np.array(original)
@@ -361,9 +410,11 @@ def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -
         background_mode = "existing_alpha"
         steps.append("preserve_existing_alpha")
     elif _looks_like_flat_document(rgb):
-        rgb, alpha = _recover_flat_document(rgb)
+        rgb, alpha = _recover_flat_document(rgb, confirmed_small_text)
         background_mode = "flat_document_recovery"
         steps.extend(["remove_connected_paper", "flatten_logo_colours", "clean_ink"])
+        if confirmed_small_text:
+            steps.append("rebuild_confirmed_small_text")
     elif flat:
         alpha = _connected_background_alpha(rgb, background)
         removed_ratio = float(np.mean(alpha < 16))

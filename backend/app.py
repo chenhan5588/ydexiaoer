@@ -231,7 +231,10 @@ def dtf_lab_repair():
         file_id = uuid.uuid4().hex[:12]
         original_path = UPLOAD_DIR / f"dtf_original_{file_id}.png"
         img.convert("RGBA").save(original_path, format="PNG")
-        output, report = run_dtf_pipeline(img)
+        confirmed_small_text = request.form.get("smallText", "").strip() or None
+        output, report = run_dtf_pipeline(
+            img, confirmed_small_text=confirmed_small_text
+        )
         output_path = OUTPUT_DIR / f"dtf_{file_id}.png"
         output.save(output_path, format="PNG", dpi=(300, 300))
         report_path = OUTPUT_DIR / f"dtf_{file_id}.json"

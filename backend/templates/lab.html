@@ -16,6 +16,11 @@
   <p class="muted">目标：生成透明 PNG 候选文件，并诚实标记边缘和文字风险。</p>
   <section class="card">
     <label class="drop" id="drop">点击或拖入一张客户原图<input id="file" type="file" accept="image/*" hidden></label>
+    <div style="margin-top:14px">
+      <label>需要重建的小字（请人工确认）：
+        <input id="smallText" placeholder="例如：électricité" style="padding:8px;width:220px">
+      </label>
+    </div>
     <div style="margin-top:14px"><button id="run" disabled>开始处理</button> <span id="state" class="muted"></span></div>
   </section>
   <section class="grid" id="result" hidden>
@@ -27,7 +32,7 @@
 let selected=null;const file=document.querySelector('#file'),run=document.querySelector('#run'),drop=document.querySelector('#drop');
 drop.onclick=()=>file.click();drop.ondragover=e=>e.preventDefault();drop.ondrop=e=>{e.preventDefault();choose(e.dataTransfer.files[0])};file.onchange=()=>choose(file.files[0]);
 function choose(f){if(!f)return;selected=f;run.disabled=false;drop.textContent=f.name;document.querySelector('#before').src=URL.createObjectURL(f)}
-run.onclick=async()=>{run.disabled=true;document.querySelector('#state').textContent='处理中…';const fd=new FormData();fd.append('image',selected);
+run.onclick=async()=>{run.disabled=true;document.querySelector('#state').textContent='处理中…';const fd=new FormData();fd.append('image',selected);fd.append('smallText',document.querySelector('#smallText').value.trim());
 try{const r=await fetch('api/dtf-lab',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error||'处理失败');
 document.querySelector('#after').src=d.preview;document.querySelector('#result').hidden=false;
 document.querySelector('#verdict').className=d.report.status==='pass'?'ok':'warn';document.querySelector('#verdict').textContent=d.report.status_label;
