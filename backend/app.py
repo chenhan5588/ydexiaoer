@@ -27,6 +27,7 @@ from PIL import Image
 from modules.auth import login_required
 from modules.quality import analyze_image
 from modules.repair import repair_image
+from modules.dtf_lab import run_pipeline as run_dtf_pipeline
 from modules.orders import (
     extract_nested_zip, find_files, find_order_json, find_images_in_order,
     parse_size_from_title, parse_size_from_sku,
@@ -60,6 +61,12 @@ _io_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img")
 @login_required
 def index():
     return render_template("index.html")
+
+
+@app.route("/lab")
+@login_required
+def dtf_lab():
+    return render_template("lab.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -211,6 +218,40 @@ def _save_preview(img, filename, fmt="PNG"):
     buf.seek(0)
     preview_b64 = base64.b64encode(buf.read()).decode()
     return f"data:image/{fmt.lower()};base64,{preview_b64}"
+
+
+@app.route("/api/dtf-lab", methods=["POST"])
+@login_required
+def dtf_lab_repair():
+    """Conservative single-image DTF prototype; never claims text reconstruction."""
+    img, err = _parse_image_from_request()
+    if err:
+        return err
+
+    try:
+        output, report = run_dtf_pipeline(img)
+        file_id = uuid.uuid4().hex[:12]
+        output_path = OUTPUT_DIR / f"dtf_{file_id}.png"
+        output.save(output_path, format="PNG", dpi=(300, 300))
+        return jsonify({
+            "file_id": file_id,
+            "preview": _save_preview(output, "preview.png"),
+            "download_url": f"/api/dtf-download/{file_id}",
+            "report": report,
+        })
+    except Exception as exc:
+        app.logger.exception("DTF lab processing failed")
+        return jsonify({"error": f"处理失败: {exc}"}), 500
+
+
+@app.route("/api/dtf-download/<file_id>")
+@login_required
+def dtf_download(file_id):
+    path = OUTPUT_DIR / f"dtf_{file_id}.png"
+    if not path.exists():
+        return jsonify({"error": "文件不存在或已过期"}), 404
+    return send_file(path, mimetype="image/png", as_attachment=True,
+                     download_name=f"dtf_ready_{file_id}.png")
 
 
 @app.route("/api/repair", methods=["POST"])
