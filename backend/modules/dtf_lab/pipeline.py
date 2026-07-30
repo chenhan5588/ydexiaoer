@@ -281,7 +281,10 @@ def _place_document_on_square(rgba: np.ndarray, target: int) -> np.ndarray:
     return canvas
 
 
-def _trace_layer(mask: np.ndarray, width: int, height: int) -> np.ndarray:
+def _trace_layer(
+    mask: np.ndarray, width: int, height: int, *,
+    turdsize: int = 8, alphamax: float = 1.0, tolerance: float = 0.18,
+) -> np.ndarray:
     """Potrace a bitmap mask and render its Bezier paths at production size."""
     with tempfile.TemporaryDirectory(prefix="printos_trace_") as temp_dir:
         bitmap = f"{temp_dir}/layer.pbm"
@@ -291,8 +294,8 @@ def _trace_layer(mask: np.ndarray, width: int, height: int) -> np.ndarray:
         Image.fromarray(np.where(mask, 0, 255).astype(np.uint8)).convert("1").save(bitmap)
         subprocess.run([
             "potrace", bitmap, "--svg", "--output", svg,
-            "--turdsize", "8", "--alphamax", "1.0",
-            "--opttolerance", "0.18",
+            "--turdsize", str(turdsize), "--alphamax", str(alphamax),
+            "--opttolerance", str(tolerance),
         ], check=True, capture_output=True, timeout=30)
         subprocess.run([
             "rsvg-convert", svg, "--width", str(width), "--height", str(height),
@@ -319,7 +322,12 @@ def _vector_render_document(
 
     black_alpha = _trace_layer(black, render_w, render_h)
     white_alpha = _trace_layer(white, render_w, render_h)
-    yellow_alpha = _trace_layer(yellow, render_w, render_h)
+    # Yellow often contains a small subtitle. Preserve accents, counters and
+    # narrow strokes instead of applying the large-logo simplification.
+    yellow_alpha = _trace_layer(
+        yellow, render_w, render_h,
+        turdsize=1, alphamax=0.35, tolerance=0.025,
+    )
     artwork = np.zeros((render_h, render_w, 4), np.uint8)
 
     def composite(colour: tuple[int, int, int], layer_alpha: np.ndarray) -> None:
