@@ -45,3 +45,19 @@ def test_uniform_subject_is_never_deleted_as_background():
     assert report["status"] == "manual"
     assert report["background_mode"] == "subject_loss_guard"
     assert np.asarray(output.getchannel("A")).min() == 255
+
+
+def test_flat_document_preserves_enclosed_white_and_removes_paper():
+    image = Image.new("RGB", (320, 200), (225, 226, 229))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((20, 15, 145, 150), radius=12, fill=(25, 25, 28))
+    draw.rectangle((55, 45, 95, 110), fill="white")
+    draw.text((175, 55), "CONTACT", fill=(20, 20, 20))
+
+    output, report = run_pipeline(image, target_long_edge=640)
+    pixels = np.asarray(output)
+
+    assert output.size == (640, 640)
+    assert report["background_mode"] == "flat_document_recovery"
+    assert pixels[0, 0, 3] == 0
+    assert pixels[150, 150, :3].mean() > 235  # enclosed white remains visible
