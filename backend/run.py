@@ -21,6 +21,6 @@ del _warm
 from waitress import serve
 from app import app
 
-print(f"PrintAI Studio 已启动: http://0.0.0.0:5051")
-print(f"登录密码: {os.environ.get('APP_PASSWORD', 'printai2024')}")
-serve(app, host='0.0.0.0', port=5051, threads=8, channel_timeout=300)
+port = int(os.environ.get("PORT", "5051"))
+print(f"PrintAI Studio 已启动: http://0.0.0.0:{port}")
+serve(app, host='0.0.0.0', port=port, threads=8, channel_timeout=300)
