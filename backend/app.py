@@ -21,7 +21,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Flask, request, jsonify, render_template, send_file, session, redirect, url_for
-from PIL import Image
+from PIL import Image, ImageOps
 
 # ---- Module imports ----
 from modules.auth import login_required
@@ -199,7 +199,7 @@ def _parse_image_from_request(required=True):
     if ext not in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"):
         return None, (jsonify({"error": f"不支持的格式: {ext}"}), 400)
     try:
-        img = Image.open(file.stream)
+        img = ImageOps.exif_transpose(Image.open(file.stream))
         if img.mode not in ("RGB", "RGBA"):
             img = img.convert("RGBA")
         return img, None

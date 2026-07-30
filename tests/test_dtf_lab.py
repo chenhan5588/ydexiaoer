@@ -61,3 +61,27 @@ def test_flat_document_preserves_enclosed_white_and_removes_paper():
     assert report["background_mode"] == "flat_document_recovery"
     assert pixels[0, 0, 3] == 0
     assert pixels[150, 150, :3].mean() > 235  # enclosed white remains visible
+
+
+def test_colourful_mascot_is_not_flattened_into_a_silhouette():
+    image = Image.new("RGB", (320, 240), "white")
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((35, 25, 185, 210), fill=(15, 90, 190))
+    draw.ellipse((75, 55, 145, 130), fill=(245, 175, 30))
+    draw.rectangle((190, 70, 295, 160), fill=(20, 20, 25))
+
+    output, report = run_pipeline(image, target_long_edge=640)
+    pixels = np.asarray(output)
+
+    assert report["background_mode"] != "flat_document_recovery"
+    blue_pixels = (
+        (pixels[..., 2] > pixels[..., 0] + 50)
+        & (pixels[..., 2] > pixels[..., 1] + 30)
+    )
+    yellow_pixels = (
+        (pixels[..., 0] > 200)
+        & (pixels[..., 1] > 120)
+        & (pixels[..., 2] < 80)
+    )
+    assert blue_pixels.any()
+    assert yellow_pixels.any()

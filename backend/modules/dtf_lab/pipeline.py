@@ -10,7 +10,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 TARGET_LONG_EDGE = 5000
 OUTPUT_DPI = 300
@@ -82,7 +82,14 @@ def _looks_like_flat_document(rgb: np.ndarray) -> bool:
         border.reshape(-1, 1, 3), cv2.COLOR_RGB2GRAY
     )))
     dark_ratio = float(np.mean(hsv[..., 2] < 105))
-    return border_lightness > 175 and dark_ratio > 0.025
+    colourful_ratio = float(np.mean((hsv[..., 1] > 85) & (hsv[..., 2] > 55)))
+    # Colour-rich artwork/mascots on white are not documents. Flattening them
+    # destroys shading and character details.
+    return (
+        border_lightness > 175
+        and dark_ratio > 0.025
+        and colourful_ratio < 0.12
+    )
 
 
 def _soft_region(mask: np.ndarray, sigma: float = 0.9) -> np.ndarray:
@@ -395,7 +402,7 @@ def run_pipeline(
     confirmed_small_text: str | None = None,
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Return a transparent, colour-preserving PNG candidate and honest report."""
-    original = image.convert("RGBA")
+    original = ImageOps.exif_transpose(image).convert("RGBA")
     rgba = np.array(original)
     rgb = rgba[..., :3]
     original_alpha = rgba[..., 3]
