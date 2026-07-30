@@ -82,12 +82,46 @@ def _looks_like_flat_document(rgb: np.ndarray) -> bool:
     return border_lightness > 175 and dark_ratio > 0.025
 
 
+def _soft_region(mask: np.ndarray, sigma: float = 0.9) -> np.ndarray:
+    """Return a clean sub-pixel coverage mask, not a blurred image."""
+    binary = mask.astype(np.uint8) * 255
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    return cv2.GaussianBlur(binary, (0, 0), sigma).astype(np.float32) / 255.0
+
+
+def _deskew_from_logo_panel(rgb: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    contours, _ = cv2.findContours(
+        (gray < 105).astype(np.uint8) * 255,
+        cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+    )
+    if not contours:
+        return rgb
+    largest = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(largest) < gray.size * 0.08:
+        return rgb
+    (_, _), (rw, rh), angle = cv2.minAreaRect(largest)
+    correction = angle + 90 if rw >= rh and angle < -45 else angle
+    if abs(correction) < 0.15 or abs(correction) > 5:
+        return rgb
+    h, w = gray.shape
+    border = np.median(_border_pixels(rgb), axis=0).tolist()
+    matrix = cv2.getRotationMatrix2D((w / 2, h / 2), correction, 1.0)
+    return cv2.warpAffine(
+        rgb, matrix, (w, h), flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_CONSTANT, borderValue=border,
+    )
+
+
 def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Recover photographed/scanned flat artwork without inventing text.
 
     Removes only border-connected paper, flattens the largest dark logo panel,
     and turns photographed black ink into clean neutral ink.
     """
+    rgb = _deskew_from_logo_panel(rgb)
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     h, w = gray.shape
@@ -108,7 +142,7 @@ def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     alpha[paper] = 0
     alpha = _clean_alpha(alpha)
 
-    cleaned = rgb.copy()
+    cleaned = rgb.copy().astype(np.float32)
     dark = (gray < 125).astype(np.uint8) * 255
     contours, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     panel_mask = np.zeros((h, w), np.uint8)
@@ -133,7 +167,19 @@ def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     if np.any(yellow):
         yellow_colour = np.median(rgb[yellow], axis=0).astype(np.uint8)
         cleaned[yellow] = yellow_colour
-    alpha[panel] = 255
+    # Re-render internal colour boundaries from sub-pixel region masks.
+    white_cover = _soft_region(white)
+    yellow_cover = _soft_region(yellow)
+    panel_cover = _soft_region(panel, sigma=1.0)
+    base = np.zeros_like(cleaned) + np.array((18, 18, 18), np.float32)
+    base = base * (1 - white_cover[..., None]) + 250 * white_cover[..., None]
+    if np.any(yellow):
+        base = (
+            base * (1 - yellow_cover[..., None])
+            + yellow_colour.astype(np.float32) * yellow_cover[..., None]
+        )
+    cleaned[panel] = base[panel]
+    alpha = np.maximum(alpha, np.round(panel_cover * 255).astype(np.uint8))
 
     # Outside the logo panel, dark photographed ink should be neutral black.
     local_ink = cv2.adaptiveThreshold(
@@ -150,16 +196,26 @@ def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     for component in range(1, count):
         cw = stats[component, cv2.CC_STAT_WIDTH]
         ch = stats[component, cv2.CC_STAT_HEIGHT]
+        cx = stats[component, cv2.CC_STAT_LEFT] + cw / 2
+        cy = stats[component, cv2.CC_STAT_TOP] + ch / 2
         is_page_rule = cw > w * 0.4 and ch < max(6, h * 0.018)
-        if stats[component, cv2.CC_STAT_AREA] >= 10 and not is_page_rule:
+        is_border_artifact = (
+            (cx < w * 0.025 or cx > w * 0.975 or cy > h * 0.965)
+            and stats[component, cv2.CC_STAT_AREA] < h * w * 0.002
+        )
+        if (
+            stats[component, cv2.CC_STAT_AREA] >= 10
+            and not is_page_rule
+            and not is_border_artifact
+        ):
             ink |= labels == component
     ink &= ~panel
     cleaned[ink] = (12, 12, 12)
     # Rebuild opacity from the ink mask so JPEG-grey stroke edges do not
     # disappear into the removed paper.
-    ink_alpha = cv2.GaussianBlur(ink.astype(np.uint8) * 255, (3, 3), 0.45)
+    ink_alpha = np.round(_soft_region(ink, sigma=0.7) * 255).astype(np.uint8)
     alpha[~panel] = ink_alpha[~panel]
-    return cleaned, alpha
+    return np.clip(cleaned, 0, 255).astype(np.uint8), alpha
 
 
 def _edge_score(alpha: np.ndarray) -> int:
