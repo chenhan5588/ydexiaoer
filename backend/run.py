@@ -22,5 +22,6 @@ from waitress import serve
 from app import app
 
 port = int(os.environ.get("PORT", "5051"))
-print(f"PrintAI Studio 已启动: http://0.0.0.0:{port}")
-serve(app, host='0.0.0.0', port=port, threads=8, channel_timeout=300)
+host = os.environ.get("HOST", "0.0.0.0")
+print(f"PrintAI Studio 已启动: http://{host}:{port}")
+serve(app, host=host, port=port, threads=8, channel_timeout=300)

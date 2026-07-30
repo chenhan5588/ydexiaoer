@@ -64,8 +64,8 @@ def index():
 
 
 @app.route("/lab")
-@login_required
 def dtf_lab():
+    """DTF lab page. Production access is protected by Nginx basic auth."""
     return render_template("lab.html")
 
 
@@ -221,7 +221,6 @@ def _save_preview(img, filename, fmt="PNG"):
 
 
 @app.route("/api/dtf-lab", methods=["POST"])
-@login_required
 def dtf_lab_repair():
     """Conservative single-image DTF prototype; never claims text reconstruction."""
     img, err = _parse_image_from_request()
@@ -245,7 +244,6 @@ def dtf_lab_repair():
 
 
 @app.route("/api/dtf-download/<file_id>")
-@login_required
 def dtf_download(file_id):
     path = OUTPUT_DIR / f"dtf_{file_id}.png"
     if not path.exists():

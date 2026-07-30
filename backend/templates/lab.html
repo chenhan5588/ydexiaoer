@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/printos-lab/">
   <title>PrintOS 单图实验室</title>
   <style>
     body{font-family:system-ui,sans-serif;background:#f4f5f7;color:#202124;margin:0}.wrap{max-width:1040px;margin:auto;padding:28px}
@@ -28,11 +28,11 @@ let selected=null;const file=document.querySelector('#file'),run=document.queryS
 drop.onclick=()=>file.click();drop.ondragover=e=>e.preventDefault();drop.ondrop=e=>{e.preventDefault();choose(e.dataTransfer.files[0])};file.onchange=()=>choose(file.files[0]);
 function choose(f){if(!f)return;selected=f;run.disabled=false;drop.textContent=f.name;document.querySelector('#before').src=URL.createObjectURL(f)}
 run.onclick=async()=>{run.disabled=true;document.querySelector('#state').textContent='处理中…';const fd=new FormData();fd.append('image',selected);
-try{const r=await fetch('/api/dtf-lab',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error||'处理失败');
+try{const r=await fetch('api/dtf-lab',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error||'处理失败');
 document.querySelector('#after').src=d.preview;document.querySelector('#result').hidden=false;
 document.querySelector('#verdict').className=d.report.status==='pass'?'ok':'warn';document.querySelector('#verdict').textContent=d.report.status_label;
 document.querySelector('#metrics').textContent=`${d.report.width}×${d.report.height}px · ${d.report.dpi}DPI · 边缘 ${d.report.edge_score} · 文字风险 ${d.report.text_risk}`;
 document.querySelector('#reasons').innerHTML=d.report.review_reasons.map(x=>`<div>• ${x}</div>`).join('');
-document.querySelector('#download').href=d.download_url;document.querySelector('#download').download='';}
+document.querySelector('#download').href='.'+d.download_url;document.querySelector('#download').download='';}
 catch(e){alert(e.message)}finally{run.disabled=false;document.querySelector('#state').textContent='';}};
 </script></body></html>
