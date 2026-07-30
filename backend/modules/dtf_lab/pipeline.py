@@ -172,15 +172,13 @@ def _recover_flat_document(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         cleaned[yellow] = yellow_colour
     # Re-render internal colour boundaries from sub-pixel region masks.
     white_cover = _soft_region(white)
-    yellow_cover = _soft_region(yellow)
     panel_cover = _soft_region(panel, sigma=1.0)
     base = np.zeros_like(cleaned) + np.array((18, 18, 18), np.float32)
     base = base * (1 - white_cover[..., None]) + 250 * white_cover[..., None]
     if np.any(yellow):
-        base = (
-            base * (1 - yellow_cover[..., None])
-            + yellow_colour.astype(np.float32) * yellow_cover[..., None]
-        )
+        # Keep the source shape intact here. Potrace performs the final
+        # sub-pixel smoothing; pre-blurring small subtitles destroys glyphs.
+        base[yellow] = yellow_colour.astype(np.float32)
     cleaned[panel] = base[panel]
     alpha = np.maximum(alpha, np.round(panel_cover * 255).astype(np.uint8))
 
