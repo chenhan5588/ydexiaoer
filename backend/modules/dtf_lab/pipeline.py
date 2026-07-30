@@ -128,8 +128,17 @@ def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -
         steps.append("preserve_existing_alpha")
     elif flat:
         alpha = _connected_background_alpha(rgb, background)
-        background_mode = "flat_border"
-        steps.append("remove_connected_flat_background")
+        removed_ratio = float(np.mean(alpha < 16))
+        if removed_ratio > 0.94:
+            # A nearly uniform design can look like its own background. Never
+            # return an empty PNG and call it a successful repair.
+            alpha = original_alpha
+            background_mode = "subject_loss_guard"
+            reasons.append("自动去底会删除几乎全部主体，已停止处理")
+            steps.append("stop_subject_loss")
+        else:
+            background_mode = "flat_border"
+            steps.append("remove_connected_flat_background")
     else:
         alpha = original_alpha
         background_mode = "complex_review"
@@ -150,10 +159,16 @@ def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -
     output = Image.fromarray(candidate)
     output.info["dpi"] = (OUTPUT_DPI, OUTPUT_DPI)
 
-    status = "pass" if not reasons else "review"
+    requires_rebuild = background_mode in ("complex_review", "subject_loss_guard")
+    status = "manual" if requires_rebuild else "pass" if not reasons else "review"
+    labels = {
+        "pass": "可进入生产测试",
+        "review": "需要美工复核",
+        "manual": "需要设计重建",
+    }
     report = LabReport(
         status=status,
-        status_label="可进入生产测试" if status == "pass" else "需要美工复核",
+        status_label=labels[status],
         width=output.width,
         height=output.height,
         dpi=OUTPUT_DPI,

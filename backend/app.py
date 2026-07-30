@@ -228,10 +228,15 @@ def dtf_lab_repair():
         return err
 
     try:
-        output, report = run_dtf_pipeline(img)
         file_id = uuid.uuid4().hex[:12]
+        original_path = UPLOAD_DIR / f"dtf_original_{file_id}.png"
+        img.convert("RGBA").save(original_path, format="PNG")
+        output, report = run_dtf_pipeline(img)
         output_path = OUTPUT_DIR / f"dtf_{file_id}.png"
         output.save(output_path, format="PNG", dpi=(300, 300))
+        report_path = OUTPUT_DIR / f"dtf_{file_id}.json"
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                               encoding="utf-8")
         return jsonify({
             "file_id": file_id,
             "preview": _save_preview(output, "preview.png"),

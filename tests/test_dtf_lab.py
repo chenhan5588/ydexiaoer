@@ -33,5 +33,15 @@ def test_complex_border_is_not_destructively_removed():
 
     assert output.size == (500, 333)
     assert report["background_mode"] == "complex_review"
-    assert report["status"] == "review"
+    assert report["status"] == "manual"
     assert report["transparent"] is False
+
+
+def test_uniform_subject_is_never_deleted_as_background():
+    image = Image.new("RGB", (180, 120), (20, 180, 90))
+
+    output, report = run_pipeline(image, target_long_edge=500)
+
+    assert report["status"] == "manual"
+    assert report["background_mode"] == "subject_loss_guard"
+    assert np.asarray(output.getchannel("A")).min() == 255
