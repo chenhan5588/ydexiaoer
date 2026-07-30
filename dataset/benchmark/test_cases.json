@@ -1,0 +1,168 @@
+{
+  "version": "1.0",
+  "description": "PrintOS 自动化回归测试用例。每次修改修复引擎后跑一遍。",
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "name": "纯色黑底 Logo 去背景",
+      "input": "v1/001/input.png",
+      "expected_output": "v1/001/output.png",
+      "type": "remove_background",
+      "difficulty": 1,
+      "pass_criteria": {
+        "has_transparency": true,
+        "psnr_min": 30,
+        "edge_jagged_max": 5
+      }
+    },
+    {
+      "id": "TC-002",
+      "name": "低分辨率放大+去背景 (1024→5906)",
+      "input": "v1/002/input.png",
+      "expected_output": "v1/002/output.png",
+      "type": "upscale_and_remove_bg",
+      "difficulty": 2,
+      "pass_criteria": {
+        "min_dimension": 5906,
+        "has_transparency": true,
+        "psnr_min": 25
+      }
+    },
+    {
+      "id": "TC-003",
+      "name": "低分辨率放大+去背景 (1206→5906)",
+      "input": "v1/003/input.png",
+      "expected_output": "v1/003/output.png",
+      "type": "upscale_and_remove_bg",
+      "difficulty": 2,
+      "pass_criteria": {
+        "min_dimension": 5906,
+        "has_transparency": true,
+        "psnr_min": 25
+      }
+    },
+    {
+      "id": "TC-004",
+      "name": "深色纹理背景去底 (1365→5906)",
+      "input": "v1/004/input.png",
+      "expected_output": "v1/004/output.png",
+      "type": "remove_background",
+      "difficulty": 2,
+      "pass_criteria": {
+        "has_transparency": true,
+        "psnr_min": 25,
+        "no_background_residue": true
+      }
+    },
+    {
+      "id": "TC-005",
+      "name": "超大图缩小+去背景 (8000→5906)",
+      "input": "v1/005/input.png",
+      "expected_output": "v1/005/output.png",
+      "type": "downscale_and_remove_bg",
+      "difficulty": 1,
+      "pass_criteria": {
+        "max_dimension": 5906,
+        "has_transparency": true,
+        "psnr_min": 35
+      }
+    },
+    {
+      "id": "TC-006",
+      "name": "实物照片转数字重绘 (摩尔纹/反光)",
+      "input": "v1/006/input.jpg",
+      "expected_output": "v1/006/output.png",
+      "type": "photo_to_digital",
+      "difficulty": 4,
+      "pass_criteria": {
+        "has_transparency": true,
+        "min_dimension": 5906,
+        "psnr_min": 18
+      },
+      "note": "这是最难的案例，PSNR 阈值降低。当前 AI 可能无法通过。"
+    },
+    {
+      "id": "TC-007",
+      "name": "实物照片转数字重绘 (反光)",
+      "input": "v1/007/input.jpg",
+      "expected_output": "v1/007/output.png",
+      "type": "photo_to_digital",
+      "difficulty": 4,
+      "pass_criteria": {
+        "has_transparency": true,
+        "min_dimension": 5906,
+        "psnr_min": 18
+      }
+    },
+    {
+      "id": "TC-008",
+      "name": "低分辨率复杂背景 (1254→5906)",
+      "input": "v1/008/input.png",
+      "expected_output": "v1/008/output.png",
+      "type": "upscale_and_remove_bg",
+      "difficulty": 2,
+      "pass_criteria": {
+        "min_dimension": 5906,
+        "has_transparency": true,
+        "psnr_min": 25
+      }
+    },
+    {
+      "id": "TC-009",
+      "name": "实物照片转数字重绘",
+      "input": "v1/009/input.jpg",
+      "expected_output": "v1/009/output.png",
+      "type": "photo_to_digital",
+      "difficulty": 3,
+      "pass_criteria": {
+        "has_transparency": true,
+        "min_dimension": 5906,
+        "psnr_min": 20
+      }
+    },
+    {
+      "id": "TC-010",
+      "name": "网页截图去水印+提取主体",
+      "input": "v1/010/input.png",
+      "expected_output": "v1/010/output.png",
+      "type": "screenshot_extract",
+      "difficulty": 3,
+      "pass_criteria": {
+        "has_transparency": true,
+        "psnr_min": 20,
+        "no_watermark": true
+      }
+    },
+    {
+      "id": "TC-011",
+      "name": "黑底 Logo 去背景",
+      "input": "v1/011/input.png",
+      "expected_output": "v1/011/output.png",
+      "type": "remove_background",
+      "difficulty": 2,
+      "pass_criteria": {
+        "has_transparency": true,
+        "psnr_min": 30
+      }
+    },
+    {
+      "id": "TC-012",
+      "name": "超大图缩小+去背景 (7400→5906)",
+      "input": "v1/012/input.png",
+      "expected_output": "v1/012/output.png",
+      "type": "downscale_and_remove_bg",
+      "difficulty": 2,
+      "pass_criteria": {
+        "max_dimension": 5906,
+        "has_transparency": true,
+        "psnr_min": 30
+      }
+    }
+  ],
+  "run_command": "python3 tests/benchmark.py --test-case all",
+  "aggregate_metrics": ["psnr", "ssim", "pass_rate", "avg_score"],
+  "pass_threshold": {
+    "overall_pass_rate": 0.75,
+    "hard_cases_pass_rate": 0.5
+  }
+}
