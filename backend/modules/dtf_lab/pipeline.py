@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import shutil
+import subprocess
+import tempfile
 from typing import Any
 
 import cv2
@@ -278,6 +281,63 @@ def _place_document_on_square(rgba: np.ndarray, target: int) -> np.ndarray:
     return canvas
 
 
+def _trace_layer(mask: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Potrace a bitmap mask and render its Bezier paths at production size."""
+    with tempfile.TemporaryDirectory(prefix="printos_trace_") as temp_dir:
+        bitmap = f"{temp_dir}/layer.pbm"
+        svg = f"{temp_dir}/layer.svg"
+        png = f"{temp_dir}/layer.png"
+        # Potrace traces black pixels.
+        Image.fromarray(np.where(mask, 0, 255).astype(np.uint8)).convert("1").save(bitmap)
+        subprocess.run([
+            "potrace", bitmap, "--svg", "--output", svg,
+            "--turdsize", "8", "--alphamax", "1.0",
+            "--opttolerance", "0.18",
+        ], check=True, capture_output=True, timeout=30)
+        subprocess.run([
+            "rsvg-convert", svg, "--width", str(width), "--height", str(height),
+            "--keep-aspect-ratio", "--output", png,
+        ], check=True, capture_output=True, timeout=30)
+        return np.asarray(Image.open(png).convert("RGBA"))[..., 3]
+
+
+def _vector_render_document(
+    rgb: np.ndarray, alpha: np.ndarray, target: int
+) -> np.ndarray | None:
+    """Trace colour-separated artwork layers, then rasterise them at high DPI."""
+    if not shutil.which("potrace") or not shutil.which("rsvg-convert"):
+        return None
+
+    h, w = alpha.shape
+    render_w = target
+    render_h = max(1, round(target * h / w))
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    visible = alpha > 70
+    yellow = visible & (hsv[..., 0] >= 10) & (hsv[..., 0] <= 45) & (hsv[..., 1] > 65)
+    white = visible & ~yellow & (cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY) > 180)
+    black = visible & ~yellow & ~white
+
+    black_alpha = _trace_layer(black, render_w, render_h)
+    white_alpha = _trace_layer(white, render_w, render_h)
+    yellow_alpha = _trace_layer(yellow, render_w, render_h)
+    artwork = np.zeros((render_h, render_w, 4), np.uint8)
+
+    def composite(colour: tuple[int, int, int], layer_alpha: np.ndarray) -> None:
+        source = Image.new("RGBA", (render_w, render_h), (*colour, 0))
+        source.putalpha(Image.fromarray(layer_alpha))
+        base = Image.fromarray(artwork)
+        artwork[:] = np.asarray(Image.alpha_composite(base, source))
+
+    composite((12, 12, 12), black_alpha)
+    composite((250, 250, 250), white_alpha)
+    yellow_colour = (
+        tuple(np.median(rgb[yellow], axis=0).astype(int))
+        if np.any(yellow) else (232, 174, 29)
+    )
+    composite(yellow_colour, yellow_alpha)
+    return _place_document_on_square(artwork, target)
+
+
 def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -> tuple[Image.Image, dict[str, Any]]:
     """Return a transparent, colour-preserving PNG candidate and honest report."""
     original = image.convert("RGBA")
@@ -327,7 +387,12 @@ def run_pipeline(image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE) -
         reasons.append("检测到小文字/密集细节风险，必须核对文字，不自动重编")
 
     if background_mode == "flat_document_recovery":
-        candidate = _place_document_on_square(candidate, target_long_edge)
+        vector_candidate = _vector_render_document(rgb, alpha, target_long_edge)
+        if vector_candidate is not None:
+            candidate = vector_candidate
+            steps.append("potrace_bezier_rerender")
+        else:
+            candidate = _place_document_on_square(candidate, target_long_edge)
     else:
         candidate = _resize_rgba(candidate, target_long_edge)
     steps.extend(["resize_preserve_aspect", "export_rgba_png"])
