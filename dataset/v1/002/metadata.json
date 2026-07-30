@@ -1,0 +1,19 @@
+{
+  "type": "logo",
+  "problem": [
+    "low_resolution",
+    "dark_background"
+  ],
+  "human_action": [
+    "upscale_to_5906",
+    "remove_background"
+  ],
+  "difficulty": 2,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 5,
+  "notes": "1024px 原始图需放大 5.7 倍，黑底保留部分作设计元素"
+}

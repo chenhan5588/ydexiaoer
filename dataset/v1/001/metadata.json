@@ -1,0 +1,19 @@
+{
+  "type": "logo",
+  "problem": [
+    "dark_background",
+    "no_transparency"
+  ],
+  "human_action": [
+    "remove_background",
+    "auto_crop"
+  ],
+  "difficulty": 1,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 3,
+  "notes": "纯色黑底 Logo，去背景即可，简单任务"
+}

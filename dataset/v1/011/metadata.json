@@ -1,0 +1,21 @@
+{
+  "type": "logo",
+  "problem": [
+    "dark_background",
+    "need_transparency",
+    "orientation_fix"
+  ],
+  "human_action": [
+    "remove_background",
+    "rotate_correct",
+    "auto_crop"
+  ],
+  "difficulty": 2,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 5,
+  "notes": "黑底 Logo，去背景 + 尺寸调整到标准"
+}

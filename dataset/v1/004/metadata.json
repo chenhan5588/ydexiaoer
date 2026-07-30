@@ -1,0 +1,19 @@
+{
+  "type": "logo",
+  "problem": [
+    "low_resolution",
+    "textured_background"
+  ],
+  "human_action": [
+    "remove_background",
+    "upscale_to_5906"
+  ],
+  "difficulty": 2,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 5,
+  "notes": "深色纹理背景 + 银色 Logo，去背景后放大"
+}

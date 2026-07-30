@@ -1,0 +1,21 @@
+{
+  "type": "photo_to_digital",
+  "problem": [
+    "moire_pattern",
+    "glare",
+    "low_quality_photo"
+  ],
+  "human_action": [
+    "manual_redraw",
+    "vectorize",
+    "remove_background"
+  ],
+  "difficulty": 4,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 30,
+  "notes": "实物照片带摩尔纹和反光，需手工重绘为数字矢量图。难度最高"
+}

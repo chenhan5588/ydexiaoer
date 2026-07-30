@@ -1,0 +1,21 @@
+{
+  "type": "photo_to_digital",
+  "problem": [
+    "glare",
+    "reflection",
+    "warped_photo"
+  ],
+  "human_action": [
+    "manual_redraw",
+    "color_correction",
+    "remove_background"
+  ],
+  "difficulty": 4,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 25,
+  "notes": "实物照片反光严重，颜色偏移，需手动重绘"
+}

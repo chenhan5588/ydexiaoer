@@ -1,0 +1,21 @@
+{
+  "type": "screenshot_extract",
+  "problem": [
+    "watermark",
+    "screenshot_ui",
+    "text_overlay"
+  ],
+  "human_action": [
+    "crop_subject",
+    "remove_watermark",
+    "remove_ui_elements"
+  ],
+  "difficulty": 3,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 15,
+  "notes": "网页截图，去掉状态栏/Facebook UI/水印，提取主体。竖长图 4320x9600"
+}

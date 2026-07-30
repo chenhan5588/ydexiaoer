@@ -1,0 +1,20 @@
+{
+  "type": "logo",
+  "problem": [
+    "low_resolution",
+    "complex_background"
+  ],
+  "human_action": [
+    "remove_background",
+    "upscale_to_5906",
+    "edge_smooth"
+  ],
+  "difficulty": 2,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 8,
+  "notes": "1254px 低分辨率 + 复杂背景，放大后需边缘平滑"
+}

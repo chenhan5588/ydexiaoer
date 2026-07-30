@@ -1,0 +1,20 @@
+{
+  "type": "photo_to_digital",
+  "problem": [
+    "photo_quality",
+    "non_white_background"
+  ],
+  "human_action": [
+    "manual_redraw",
+    "color_enhance",
+    "remove_background"
+  ],
+  "difficulty": 3,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 20,
+  "notes": "实物照片转数字，颜色需增强还原"
+}

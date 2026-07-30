@@ -1,0 +1,19 @@
+{
+  "type": "logo",
+  "problem": [
+    "oversized",
+    "need_transparency"
+  ],
+  "human_action": [
+    "remove_background",
+    "downscale_to_5906"
+  ],
+  "difficulty": 1,
+  "print_info": {
+    "method": "DTF",
+    "target_size_cm": 30,
+    "material": "cotton"
+  },
+  "time_minutes": 3,
+  "notes": "8000px 原图过大，需缩小到标准尺寸 + 去背景"
+}
