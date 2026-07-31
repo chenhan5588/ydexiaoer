@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
 import shutil
 import subprocess
 import tempfile
@@ -145,8 +146,18 @@ def _render_confirmed_small_text(
 
     mask = Image.new("L", (yellow.shape[1], yellow.shape[0]), 0)
     draw = ImageDraw.Draw(mask)
-    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    font = ImageFont.truetype(font_path, max(8, int(h * 1.05)))
+    font_candidates = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+    )
+    font_path = next(
+        (path for path in font_candidates if Path(path).exists()), None
+    )
+    font = (
+        ImageFont.truetype(font_path, max(8, int(h * 1.05)))
+        if font_path else ImageFont.load_default()
+    )
     widths = [draw.textlength(char, font=font) for char in text]
     base_width = sum(widths)
     spacing = max(0.0, (w - base_width) / max(1, len(text) - 1))
