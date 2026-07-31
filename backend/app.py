@@ -232,8 +232,32 @@ def dtf_lab_repair():
         original_path = UPLOAD_DIR / f"dtf_original_{file_id}.png"
         img.convert("RGBA").save(original_path, format="PNG")
         confirmed_small_text = request.form.get("smallText", "").strip() or None
+        recovery_mode = request.form.get("recoveryMode", "auto").strip()
+        feedback_flags = {
+            value for value in request.form.getlist("feedback")
+            if value in {
+                "remove_noise", "smooth_edges", "thicken_lines",
+                "thin_lines", "preserve_detail",
+            }
+        }
+        rotation = int(request.form.get("rotation", "0") or 0)
+        crop_values = [
+            request.form.get(name, "").strip()
+            for name in ("cropX", "cropY", "cropW", "cropH")
+        ]
+        if all(crop_values):
+            x, y, w, h = [float(value) for value in crop_values]
+            left = max(0, min(img.width - 1, round(x * img.width)))
+            top = max(0, min(img.height - 1, round(y * img.height)))
+            right = max(left + 1, min(img.width, round((x + w) * img.width)))
+            bottom = max(top + 1, min(img.height, round((y + h) * img.height)))
+            img = img.crop((left, top, right, bottom))
+        if rotation in (90, 180, 270):
+            img = img.rotate(-rotation, expand=True)
         output, report = run_dtf_pipeline(
-            img, confirmed_small_text=confirmed_small_text
+            img, confirmed_small_text=confirmed_small_text,
+            recovery_mode=recovery_mode,
+            feedback_flags=feedback_flags,
         )
         output_path = OUTPUT_DIR / f"dtf_{file_id}.png"
         output.save(output_path, format="PNG", dpi=(300, 300))

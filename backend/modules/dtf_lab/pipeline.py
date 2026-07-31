@@ -350,9 +350,12 @@ def _trace_layer(
         ], check=True, capture_output=True, timeout=30)
         subprocess.run([
             "rsvg-convert", svg, "--width", str(width), "--height", str(height),
-            "--keep-aspect-ratio", "--output", png,
+            "--output", png,
         ], check=True, capture_output=True, timeout=30)
-        return np.asarray(Image.open(png).convert("RGBA"))[..., 3]
+        rendered = Image.open(png).convert("RGBA")
+        if rendered.size != (width, height):
+            rendered = rendered.resize((width, height), Image.Resampling.LANCZOS)
+        return np.asarray(rendered)[..., 3]
 
 
 def _vector_render_document(
@@ -397,9 +400,163 @@ def _vector_render_document(
     return _place_document_on_square(artwork, target)
 
 
+def _render_traced_layers(
+    layers: list[tuple[np.ndarray, tuple[int, int, int]]], target: int
+) -> np.ndarray | None:
+    """Trace selected design-colour masks and place them on a square canvas."""
+    can_trace = bool(shutil.which("potrace") and shutil.which("rsvg-convert"))
+    visible = np.zeros_like(layers[0][0], dtype=bool)
+    for mask, _ in layers:
+        visible |= mask
+    points = cv2.findNonZero(visible.astype(np.uint8))
+    if points is None:
+        return None
+    x, y, w, h = cv2.boundingRect(points)
+    padding = max(4, round(max(w, h) * 0.015))
+    x0, y0 = max(0, x - padding), max(0, y - padding)
+    x1 = min(visible.shape[1], x + w + padding)
+    y1 = min(visible.shape[0], y + h + padding)
+    render_w = target
+    render_h = max(1, round(target * (y1 - y0) / (x1 - x0)))
+    artwork = np.zeros((render_h, render_w, 4), np.uint8)
+    for mask, colour in layers:
+        cropped = mask[y0:y1, x0:x1]
+        if can_trace:
+            layer_alpha = _trace_layer(
+                cropped, render_w, render_h,
+                turdsize=2, alphamax=0.65, tolerance=0.06,
+            )
+        else:
+            # Deterministic local fallback used by tests and CPU-only installs.
+            # Supersampling keeps the same narrow antialiasing behaviour as the
+            # SVG renderer without blurring the interior of small lettering.
+            layer_alpha = cv2.resize(
+                cropped.astype(np.uint8) * 255,
+                (render_w, render_h),
+                interpolation=cv2.INTER_CUBIC,
+            )
+            layer_alpha = cv2.GaussianBlur(layer_alpha, (3, 3), 0.42)
+        source = Image.new("RGBA", (render_w, render_h), (*colour, 0))
+        source.putalpha(Image.fromarray(layer_alpha))
+        artwork[:] = np.asarray(
+            Image.alpha_composite(Image.fromarray(artwork), source)
+        )
+    return _place_document_on_square(artwork, target)
+
+
+def _recover_line_art(
+    rgb: np.ndarray, target: int, feedback: set[str] | None = None
+) -> np.ndarray | None:
+    """Turn a user-selected photographed drawing into smooth transparent ink."""
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    # Remove slow lighting/paper variation first. Pencil/ink strokes remain as
+    # local dark valleys, while paper fibres and camera shading mostly vanish.
+    gray = cv2.bilateralFilter(gray, 7, 28, 28)
+    background = cv2.GaussianBlur(gray, (0, 0), 15)
+    darkness = cv2.subtract(background, gray)
+    positive = darkness[darkness > 0]
+    if positive.size == 0:
+        return None
+    otsu, _ = cv2.threshold(
+        darkness, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
+    threshold = max(10, min(34, int(otsu)))
+    ink = (darkness >= threshold).astype(np.uint8) * 255
+    ink = cv2.morphologyEx(
+        ink, cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+    )
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(ink, 8)
+    keep = np.zeros_like(ink, dtype=bool)
+    feedback = feedback or set()
+    area_divisor = 220000 if "preserve_detail" in feedback else 120000
+    minimum_area = max(8 if "preserve_detail" in feedback else 14,
+                       ink.size // area_divisor)
+    for component in range(1, count):
+        area = stats[component, cv2.CC_STAT_AREA]
+        cw = stats[component, cv2.CC_STAT_WIDTH]
+        ch = stats[component, cv2.CC_STAT_HEIGHT]
+        # Preserve long thin calligraphy strokes, but reject isolated paper
+        # grain and compression speckles.
+        if area >= minimum_area or max(cw, ch) >= max(gray.shape) * 0.025:
+            keep |= labels == component
+    shape_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    if "remove_noise" in feedback:
+        keep = cv2.morphologyEx(
+            keep.astype(np.uint8), cv2.MORPH_OPEN, shape_kernel
+        ).astype(bool)
+    if "smooth_edges" in feedback:
+        keep = cv2.medianBlur(keep.astype(np.uint8) * 255, 5) > 127
+    if "thicken_lines" in feedback:
+        keep = cv2.dilate(keep.astype(np.uint8), shape_kernel).astype(bool)
+    elif "thin_lines" in feedback:
+        keep = cv2.erode(keep.astype(np.uint8), shape_kernel).astype(bool)
+    return _render_traced_layers([(keep, (18, 18, 18))], target)
+
+
+def _recover_embroidery(
+    rgb: np.ndarray, target: int, feedback: set[str] | None = None
+) -> np.ndarray | None:
+    """Flatten selected embroidery colours while suppressing cloth texture."""
+    smooth = cv2.bilateralFilter(rgb, 9, 55, 55)
+    hsv = cv2.cvtColor(smooth, cv2.COLOR_RGB2HSV)
+    gray = cv2.cvtColor(smooth, cv2.COLOR_RGB2GRAY)
+    white = (hsv[..., 1] < 68) & (gray > 168)
+    # Embroidery thread is normally substantially brighter and more saturated
+    # than the surrounding cloth. Conservative thresholds avoid tracing the
+    # knitted fabric as part of the production artwork.
+    vivid = (hsv[..., 1] > 92) & (hsv[..., 2] > 112)
+    green = vivid & (hsv[..., 0] >= 34) & (hsv[..., 0] < 65)
+    cyan = vivid & (hsv[..., 0] >= 65) & (hsv[..., 0] <= 105)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+    feedback = feedback or set()
+
+    def tidy(mask: np.ndarray, *, stronger: bool = False) -> np.ndarray:
+        if stronger:
+            mask = cv2.medianBlur(mask.astype(np.uint8) * 255, 5) > 127
+        cleaned = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+        if "smooth_edges" in feedback or "remove_noise" in feedback:
+            cleaned = cv2.medianBlur(cleaned * 255, 7) > 127
+            cleaned = cleaned.astype(np.uint8)
+        if "thicken_lines" in feedback:
+            cleaned = cv2.dilate(cleaned, kernel, iterations=1)
+        elif "thin_lines" in feedback:
+            cleaned = cv2.erode(cleaned, kernel, iterations=1)
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(cleaned, 8)
+        result = np.zeros_like(cleaned, dtype=bool)
+        if "preserve_detail" in feedback:
+            divisor = 90000
+        else:
+            divisor = 18000 if "remove_noise" in feedback else 40000
+        minimum_area = max(30, cleaned.size // divisor)
+        for component in range(1, count):
+            area = stats[component, cv2.CC_STAT_AREA]
+            cw = stats[component, cv2.CC_STAT_WIDTH]
+            ch = stats[component, cv2.CC_STAT_HEIGHT]
+            if area >= minimum_area or max(cw, ch) >= max(cleaned.shape) * 0.035:
+                result |= labels == component
+        return result
+
+    white, green, cyan = tidy(white, stronger=True), tidy(green), tidy(cyan)
+    layers: list[tuple[np.ndarray, tuple[int, int, int]]] = []
+    if np.any(green):
+        layers.append((green, tuple(np.median(rgb[green], axis=0).astype(int))))
+    if np.any(cyan):
+        layers.append((cyan, tuple(np.median(rgb[cyan], axis=0).astype(int))))
+    if np.any(white):
+        layers.append((white, (245, 245, 242)))
+    if not layers:
+        return None
+    return _render_traced_layers(layers, target)
+
+
 def run_pipeline(
     image: Image.Image, target_long_edge: int = TARGET_LONG_EDGE,
     confirmed_small_text: str | None = None,
+    recovery_mode: str = "auto",
+    feedback_flags: set[str] | None = None,
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Return a transparent, colour-preserving PNG candidate and honest report."""
     original = ImageOps.exif_transpose(image).convert("RGBA")
@@ -412,7 +569,23 @@ def run_pipeline(
     already_transparent = bool(np.any(original_alpha < 250))
     flat, background, uniformity = _flat_border_background(rgb)
 
-    if already_transparent:
+    specialised_candidate = None
+    if recovery_mode == "line_art":
+        specialised_candidate = _recover_line_art(
+            rgb, target_long_edge, feedback_flags
+        )
+        background_mode = "line_art_recovery"
+        steps.extend(["extract_line_art", "potrace_bezier_rerender"])
+        alpha = original_alpha
+    elif recovery_mode == "embroidery":
+        specialised_candidate = _recover_embroidery(
+            rgb, target_long_edge, feedback_flags
+        )
+        background_mode = "embroidery_recovery"
+        steps.extend(["suppress_fabric_texture", "separate_thread_colours",
+                      "potrace_bezier_rerender"])
+        alpha = original_alpha
+    elif already_transparent:
         alpha = original_alpha
         background_mode = "existing_alpha"
         steps.append("preserve_existing_alpha")
@@ -442,15 +615,10 @@ def run_pipeline(
 
     alpha = _clean_alpha(alpha)
     candidate = np.dstack((rgb, alpha))
-    edge_score = _edge_score(alpha)
-    text_risk = _text_risk(rgb)
 
-    if edge_score < 82:
-        reasons.append(f"边缘评分 {edge_score}，需要美工放大检查")
-    if text_risk != "low":
-        reasons.append("检测到小文字/密集细节风险，必须核对文字，不自动重编")
-
-    if background_mode == "flat_document_recovery":
+    if specialised_candidate is not None:
+        candidate = specialised_candidate
+    elif background_mode == "flat_document_recovery":
         vector_candidate = _vector_render_document(rgb, alpha, target_long_edge)
         if vector_candidate is not None:
             candidate = vector_candidate
@@ -459,11 +627,21 @@ def run_pipeline(
             candidate = _place_document_on_square(candidate, target_long_edge)
     else:
         candidate = _resize_rgba(candidate, target_long_edge)
+    edge_score = _edge_score(candidate[..., 3])
+    text_risk = _text_risk(rgb)
+    if edge_score < 82:
+        reasons.append(f"边缘评分 {edge_score}，需要美工放大检查")
+    if text_risk != "low":
+        reasons.append("检测到小文字/密集细节风险，必须核对文字，不自动重编")
     steps.extend(["resize_preserve_aspect", "export_rgba_png"])
     output = Image.fromarray(candidate)
     output.info["dpi"] = (OUTPUT_DPI, OUTPUT_DPI)
 
-    requires_rebuild = background_mode in ("complex_review", "subject_loss_guard")
+    requires_rebuild = (
+        background_mode in ("complex_review", "subject_loss_guard")
+        or specialised_candidate is None
+        and recovery_mode in ("line_art", "embroidery")
+    )
     status = "manual" if requires_rebuild else "pass" if not reasons else "review"
     labels = {
         "pass": "可进入生产测试",

@@ -7,6 +7,7 @@
     body{font-family:system-ui,sans-serif;background:#f4f5f7;color:#202124;margin:0}.wrap{max-width:1040px;margin:auto;padding:28px}
     .card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:20px;margin-bottom:18px}.drop{border:2px dashed #8b8fa3;padding:45px;text-align:center;border-radius:12px;cursor:pointer}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.preview{width:100%;height:360px;object-fit:contain;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 50%/20px 20px}
+    #cropCanvas{width:100%;height:360px;background:#eee;cursor:crosshair}
     button{background:#5146b7;color:white;border:0;border-radius:8px;padding:10px 18px;cursor:pointer}.muted{color:#666;font-size:13px}.warn{color:#a15c00}.ok{color:#087f5b}
     @media(max-width:720px){.grid{grid-template-columns:1fr}.preview{height:260px}}
   </style>
@@ -17,22 +18,54 @@
   <section class="card">
     <label class="drop" id="drop">点击或拖入一张客户原图<input id="file" type="file" accept="image/*" hidden></label>
     <div style="margin-top:14px">
+      <label>处理类型：
+        <select id="recoveryMode" style="padding:8px">
+          <option value="auto">自动/平面名片</option>
+          <option value="line_art">手稿线条</option>
+          <option value="embroidery">刺绣徽标</option>
+        </select>
+      </label>
+      <label style="margin-left:12px">旋转：
+        <select id="rotation" style="padding:8px">
+          <option value="0">不旋转</option><option value="90">顺时针90°</option>
+          <option value="180">180°</option><option value="270">逆时针90°</option>
+        </select>
+      </label>
+    </div>
+    <div style="margin-top:14px">
       <label>需要重建的小字（请人工确认）：
         <input id="smallText" placeholder="例如：électricité" style="padding:8px;width:220px">
       </label>
     </div>
+    <div style="margin-top:14px">
+      <strong>美工修改意见（可多选后再次处理）：</strong><br>
+      <label><input type="checkbox" name="feedback" value="remove_noise"> 清除布纹/纸纹杂点</label>
+      <label><input type="checkbox" name="feedback" value="smooth_edges"> 边缘更平滑</label>
+      <label><input type="checkbox" name="feedback" value="thicken_lines"> 线条加粗</label>
+      <label><input type="checkbox" name="feedback" value="thin_lines"> 线条减细</label>
+      <label><input type="checkbox" name="feedback" value="preserve_detail"> 优先保留细节</label>
+    </div>
     <div style="margin-top:14px"><button id="run" disabled>开始处理</button> <span id="state" class="muted"></span></div>
   </section>
   <section class="grid" id="result" hidden>
-    <div class="card"><h3>客户原图</h3><img id="before" class="preview"></div>
+    <div class="card"><h3>客户原图</h3><p class="muted">衣服/刺绣照片请拖动框选要提取的图案；不框选则处理整张。</p><canvas id="cropCanvas" width="900" height="600"></canvas><p><button id="clearCrop" type="button">清除框选</button></p></div>
     <div class="card"><h3>处理候选图</h3><img id="after" class="preview"><p id="verdict"></p><p id="metrics" class="muted"></p><div id="reasons" class="warn"></div><p><a id="download">下载透明 PNG</a></p></div>
   </section>
 </main>
 <script>
-let selected=null;const file=document.querySelector('#file'),run=document.querySelector('#run'),drop=document.querySelector('#drop');
+let selected=null,sourceImage=null,crop=null,dragStart=null;
+const file=document.querySelector('#file'),run=document.querySelector('#run'),drop=document.querySelector('#drop'),canvas=document.querySelector('#cropCanvas'),ctx=canvas.getContext('2d');
 drop.onclick=()=>file.click();drop.ondragover=e=>e.preventDefault();drop.ondrop=e=>{e.preventDefault();choose(e.dataTransfer.files[0])};file.onchange=()=>choose(file.files[0]);
-function choose(f){if(!f)return;selected=f;run.disabled=false;drop.textContent=f.name;document.querySelector('#before').src=URL.createObjectURL(f)}
+function drawCanvas(){if(!sourceImage)return;ctx.clearRect(0,0,canvas.width,canvas.height);const s=Math.min(canvas.width/sourceImage.width,canvas.height/sourceImage.height),w=sourceImage.width*s,h=sourceImage.height*s,x=(canvas.width-w)/2,y=(canvas.height-h)/2;canvas.imageRect={x,y,w,h};ctx.drawImage(sourceImage,x,y,w,h);if(crop){ctx.strokeStyle='#ff3b30';ctx.lineWidth=5;ctx.strokeRect(x+crop.x*w,y+crop.y*h,crop.w*w,crop.h*h)}}
+function choose(f){if(!f)return;selected=f;crop=null;run.disabled=false;drop.textContent=f.name;sourceImage=new Image();sourceImage.onload=()=>{document.querySelector('#result').hidden=false;drawCanvas()};sourceImage.src=URL.createObjectURL(f)}
+function pointer(e){const r=canvas.getBoundingClientRect(),ir=canvas.imageRect,sx=canvas.width/r.width,sy=canvas.height/r.height;return{x:Math.max(ir.x,Math.min(ir.x+ir.w,(e.clientX-r.left)*sx)),y:Math.max(ir.y,Math.min(ir.y+ir.h,(e.clientY-r.top)*sy))}}
+canvas.onpointerdown=e=>{dragStart=pointer(e);canvas.setPointerCapture(e.pointerId)};
+canvas.onpointermove=e=>{if(!dragStart)return;const p=pointer(e),ir=canvas.imageRect,x=Math.min(p.x,dragStart.x),y=Math.min(p.y,dragStart.y);crop={x:(x-ir.x)/ir.w,y:(y-ir.y)/ir.h,w:Math.abs(p.x-dragStart.x)/ir.w,h:Math.abs(p.y-dragStart.y)/ir.h};drawCanvas()};
+canvas.onpointerup=()=>{dragStart=null;if(crop&&(crop.w<.02||crop.h<.02))crop=null;drawCanvas()};
+document.querySelector('#clearCrop').onclick=()=>{crop=null;drawCanvas()};
 run.onclick=async()=>{run.disabled=true;document.querySelector('#state').textContent='处理中…';const fd=new FormData();fd.append('image',selected);fd.append('smallText',document.querySelector('#smallText').value.trim());
+fd.append('recoveryMode',document.querySelector('#recoveryMode').value);fd.append('rotation',document.querySelector('#rotation').value);if(crop){fd.append('cropX',crop.x);fd.append('cropY',crop.y);fd.append('cropW',crop.w);fd.append('cropH',crop.h)}
+document.querySelectorAll('input[name="feedback"]:checked').forEach(x=>fd.append('feedback',x.value));
 try{const r=await fetch('api/dtf-lab',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error||'处理失败');
 document.querySelector('#after').src=d.preview;document.querySelector('#result').hidden=false;
 document.querySelector('#verdict').className=d.report.status==='pass'?'ok':'warn';document.querySelector('#verdict').textContent=d.report.status_label;

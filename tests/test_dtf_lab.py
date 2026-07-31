@@ -85,3 +85,35 @@ def test_colourful_mascot_is_not_flattened_into_a_silhouette():
     )
     assert blue_pixels.any()
     assert yellow_pixels.any()
+
+
+def test_line_art_mode_outputs_transparent_smoothed_ink():
+    image = Image.new("RGB", (320, 220), (215, 218, 222))
+    draw = ImageDraw.Draw(image)
+    draw.line((40, 50, 270, 170), fill=(45, 45, 48), width=5)
+    draw.line((55, 175, 250, 45), fill=(55, 55, 58), width=4)
+
+    output, report = run_pipeline(
+        image, target_long_edge=600, recovery_mode="line_art",
+        feedback_flags={"remove_noise", "smooth_edges"},
+    )
+
+    assert output.size == (600, 600)
+    assert report["background_mode"] == "line_art_recovery"
+    assert report["transparent"] is True
+
+
+def test_embroidery_feedback_outputs_transparent_colour_layers():
+    image = Image.new("RGB", (360, 180), (28, 70, 53))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((20, 20, 150, 155), outline=(0, 220, 175), width=12)
+    draw.text((165, 65), "LAND", fill=(245, 245, 240))
+
+    output, report = run_pipeline(
+        image, target_long_edge=600, recovery_mode="embroidery",
+        feedback_flags={"remove_noise", "smooth_edges"},
+    )
+
+    assert output.size == (600, 600)
+    assert report["background_mode"] == "embroidery_recovery"
+    assert report["transparent"] is True
